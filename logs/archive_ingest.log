@@ -1,0 +1,81 @@
+45 archives on the server, 35.1 GB zipped
+
+-- round 1: 18/45 complete, 27 to go (1.3/26.9 GB fetched)
+  Q4_2019     0.65 GB in   0.7 min  ok
+  Q1_2020     0.69 GB in   2.7 min  ok
+  Q2_2020     0.75 GB in   4.1 min  ok
+  Q3_2020     0.81 GB in   6.2 min  ok
+  Q4_2020     0.87 GB in   9.6 min  ok
+  Q1_2021     0.89 GB in  10.3 min  ok
+  Q2_2021     0.91 GB in   6.9 min  ok
+  Q3_2021     0.97 GB in   6.5 min  ok
+  Q4_2021     1.03 GB in   9.5 min  ok
+  Q1_2022     1.06 GB in   8.0 min  ok
+  Q2_2022     1.10 GB in   8.5 min  ok
+  Q3_2022     0.79 GB in   6.9 min  ok
+  Q4_2022     0.82 GB in   7.3 min  ok
+  Q1_2023     0.82 GB in   8.4 min  ok
+  Q2_2023     0.86 GB in   6.5 min  ok
+  Q3_2023     0.98 GB in   7.7 min  ok
+  Q4_2023     1.01 GB in  11.2 min  ok
+  Q1_2024     1.01 GB in  11.3 min  ok
+  Q2_2024     1.02 GB in   6.8 min  ok
+  Q3_2024     1.05 GB in   7.4 min  ok
+  Q4_2024     1.07 GB in   8.4 min  ok
+  Q1_2025     1.02 GB in  10.3 min  ok
+  Q2_2025     1.07 GB in   9.4 min  ok
+  Q3_2025     1.11 GB in  10.2 min  ok
+  Q4_2025     1.16 GB in   9.7 min  ok
+  Q1_2026     1.31 GB in   9.6 min  ok
+  Q2_2026     2.09 GB in   6.7 min  ok
+all 45 archives complete
+converting 45 archives with 6 workers
+  2013       cached
+  2014       cached
+  2015       cached
+  Q1_2016       5,467,888 drive-days    64,074 drives     336 failures    0.7 min
+  Q2_2016       5,971,169 drive-days    71,910 drives     385 failures    0.8 min
+  Q3_2016       6,443,112 drive-days    74,574 drives     358 failures    0.8 min
+  Q1_2017       6,632,104 drive-days    85,301 drives     380 failures    0.9 min
+  Q4_2016       6,589,448 drive-days    74,453 drives     349 failures    0.9 min
+  Q2_2017       7,568,630 drive-days    89,837 drives     393 failures    1.0 min
+  Q3_2017       8,004,840 drive-days    95,188 drives     392 failures    1.1 min
+  Q4_2017       8,266,213 drive-days    96,086 drives     382 failures    1.1 min
+  Q1_2018       8,949,492 drive-days   105,004 drives     333 failures    1.2 min
+  Q2_2018       9,144,206 drive-days   105,634 drives     292 failures    1.2 min
+  Q3_2018       9,249,199 drive-days   105,563 drives     351 failures    1.2 min
+  Q4_2018       9,357,609 drive-days   108,718 drives     389 failures    1.4 min
+C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\scripts\build_backblaze_archive.py:315: UserWarning: Could not infer format, so each element will be parsed individually, falling back to `dateutil`. To ensure parsing is consistent and as-expected, please specify a format.
+  df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+  Q1_2019       9,577,046 drive-days   115,231 drives     428 failures    1.4 min
+  Q2_2019       9,831,138 drive-days   111,817 drives     500 failures    1.5 min
+  Q3_2019      10,338,153 drive-days   116,270 drives     622 failures    1.5 min
+  Q4_2019      10,991,209 drive-days   125,731 drives     676 failures    1.6 min
+  Q1_2020      11,602,907 drive-days   132,752 drives     409 failures    1.7 min
+  Q2_2020      12,498,547 drive-days   144,876 drives     314 failures    1.8 min
+  Q3_2020      13,553,809 drive-days   160,165 drives     368 failures    2.0 min
+  Q4_2020      14,631,135 drive-days   171,895 drives     404 failures    2.2 min
+  Q1_2021      15,287,372 drive-days   185,140 drives     399 failures    2.3 min
+  Q2_2021      16,226,492 drive-days   192,629 drives     507 failures    2.5 min
+  Q3_2021      17,395,221 drive-days   197,385 drives     580 failures    2.7 min
+  Q4_2021      18,385,255 drive-days   207,833 drives     672 failures    3.0 min
+  Q1_2022      18,845,260 drive-days   212,404 drives     664 failures    3.1 min
+  Q2_2022      19,424,436 drive-days   221,509 drives     796 failures    3.2 min
+  Q3_2022      20,591,757 drive-days   232,016 drives     963 failures    3.0 min
+  Q4_2022      21,496,309 drive-days   236,495 drives     735 failures    3.1 min
+  Q1_2023      21,454,992 drive-days   242,703 drives     929 failures    3.1 min
+  Q2_2023      21,835,156 drive-days   248,100 drives   1,389 failures    3.4 min
+  Q3_2023      23,601,986 drive-days   269,665 drives     982 failures    4.0 min
+  Q4_2023      24,790,999 drive-days   281,346 drives   1,057 failures    4.4 min
+  Q1_2024      25,189,213 drive-days   291,331 drives     978 failures    4.4 min
+  Q2_2024      26,022,269 drive-days   295,996 drives   1,230 failures    4.5 min
+  Q3_2024      26,822,987 drive-days   301,529 drives   1,424 failures    4.6 min
+  Q4_2024      27,345,292 drive-days   308,180 drives   1,032 failures    4.7 min
+  Q1_2025      27,799,986 drive-days   318,426 drives   1,067 failures    4.8 min
+  Q2_2025      28,808,042 drive-days   322,499 drives   1,061 failures    4.9 min
+  Q3_2025      29,844,451 drive-days   332,915 drives   1,254 failures    5.0 min
+  Q4_2025      30,941,708 drive-days   341,664 drives     945 failures    5.0 min
+  Q1_2026      30,597,484 drive-days   351,095 drives   1,030 failures    4.9 min
+  Q2_2026      31,968,003 drive-days   359,101 drives   1,522 failures    5.2 min
+
+744,525,690 drive-days across 45 shards in data\backblaze_archive\shards

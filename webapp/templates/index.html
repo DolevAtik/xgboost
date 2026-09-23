@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drive Failure Prediction</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#fff; --ink:#1c2024; --muted:#6b7280; --line:#e2e5ea;
+    --blue:#3b6ea5; --red:#c1442e; --amber:#d99a2b; --green:#4f7d3a;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:14px 20px;
+           display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  h1 { font-size:17px; margin:0; font-weight:650; }
+  .sub { color:var(--muted); font-size:12.5px; }
+  main { max-width:1120px; margin:0 auto; padding:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px;
+          padding:16px; margin-bottom:16px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .spacer { flex:1; }
+  .note { color:var(--muted); font-size:12.5px; }
+  .mono { font-family:"SF Mono",Consolas,"Courier New",monospace; font-size:13px; }
+  .hidden { display:none; }
+
+  /* upload */
+  #drop { border:2px dashed #c6ccd5; border-radius:10px; padding:34px 20px; text-align:center;
+          background:#fbfcfd; cursor:pointer; transition:.12s; }
+  #drop:hover, #drop.over { border-color:var(--blue); background:#f0f5fa; }
+  #drop .big { font-size:16px; font-weight:600; margin-bottom:4px; }
+  button { padding:7px 13px; border:1px solid var(--line); background:var(--card);
+           border-radius:6px; cursor:pointer; font:inherit; font-size:13.5px; color:var(--ink); }
+  button:hover { background:#eef1f5; }
+  button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+  button:disabled { opacity:.5; cursor:default; }
+  .chip { border:1px solid var(--line); background:var(--card); border-radius:999px;
+          padding:5px 12px; cursor:pointer; font-size:12.5px; }
+  .chip:hover { background:#eef1f5; border-color:var(--blue); }
+  .chip.example { background:#f2f7fc; border-color:#c3d6e8; }
+  .chip.example:hover { background:#e6eef7; }
+
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); }
+  th { font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+       font-weight:600; }
+  tbody tr { cursor:pointer; }
+  tbody tr:hover { background:#f0f4f8; }
+  tbody tr.sel { background:#e6eef7; }
+  .bar { display:flex; align-items:center; gap:8px; }
+  .bar .track { display:block; flex:1; height:7px; background:#e9ecf1; border-radius:4px;
+                overflow:hidden; min-width:70px; }
+  .bar .fill { display:block; height:100%; border-radius:4px; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px;
+          font-weight:600; }
+  .pill.act { background:#fbe9e5; color:var(--red); }
+  .pill.ok  { background:#eaf1e6; color:var(--green); }
+  .pill.warn{ background:#fdf3e0; color:#8a6414; }
+  .kpis { display:flex; gap:24px; flex-wrap:wrap; }
+  .kpi .n { font-size:21px; font-weight:650; font-variant-numeric:tabular-nums; }
+  .kpi .l { font-size:11.5px; color:var(--muted); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:12px; }
+  .spark { border:1px solid var(--line); border-radius:6px; padding:8px 10px; }
+  .spark .name { font-size:11.5px; color:var(--muted);
+                 font-family:"SF Mono",Consolas,monospace; }
+  .spark .val { font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .spark .med { font-size:11px; color:var(--muted); }
+  .err { background:#fdece8; border:1px solid #f0c3b8; color:#8c2f1c; border-radius:8px;
+         padding:12px 14px; }
+  details summary { cursor:pointer; font-weight:600; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #cfd6df;
+          border-top-color:var(--blue); border-radius:50%; animation:sp .8s linear infinite;
+          vertical-align:-2px; margin-right:7px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Drive Failure Prediction</h1>
+  <span class="sub" id="hdr">loading…</span>
+</header>
+
+<main>
+
+  <div class="card">
+    <div id="drop">
+      <div class="big">Drop a 90-day telemetry file here</div>
+      <div class="note">or click to choose &nbsp;·&nbsp; <span class="mono">.xlsx</span>
+        or <span class="mono">.csv</span> &nbsp;·&nbsp; one drive or a whole family</div>
+      <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv" class="hidden">
+    </div>
+    <label class="row" style="margin-top:14px; cursor:pointer; gap:7px">
+      <input type="checkbox" id="pad">
+      <span>Also score drives with a partial window</span>
+      <span class="note">— a drive that stopped reporting partway through has fewer than
+        90 days. Off, it is skipped; on, it is left-padded to 90 and scored anyway, and
+        the result is marked <span class="pill warn">partial</span>. In a historical file
+        the drives that failed are usually the short ones.</span>
+    </label>
+    <div class="row" style="margin-top:14px" id="examples"></div>
+    <div class="row" style="margin-top:10px" id="samples"></div>
+    <p class="note" style="margin-bottom:0; margin-top:12px">
+      The file needs a <span class="mono">date</span> column, a
+      <span class="mono">serial_number</span> column, and at least
+      <span class="mono">90</span> consecutive days per drive. Missing SMART columns are
+      filled with the training-set median — the panel below reports exactly which ones
+      were found. Nothing is uploaded anywhere; it is parsed in this process and dropped.
+    </p>
+  </div>
+
+  <div id="status"></div>
+  <div id="out"></div>
+  <div class="card hidden" id="detail"></div>
+
+  <div class="card">
+    <details>
+      <summary>What the model reads — and what it is forbidden to read</summary>
+      <p class="note" id="explain" style="margin-bottom:10px"></p>
+      <table><thead><tr>
+        <th style="width:290px">Blocked column</th><th>Why it was dropped</th>
+      </tr></thead><tbody id="blocked"></tbody></table>
+    </details>
+  </div>
+
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let META = null, RESULT = null, SEL = null;
+const fmt = (x,d=3) => x==null ? "—" : Number(x).toFixed(d);
+const riskColor = r => r>=.66 ? "var(--red)" : r>=.33 ? "var(--amber)" : "var(--green)";
+
+async function boot() {
+  META = await (await fetch("/api/meta")).json();
+  $("#hdr").textContent =
+    `${META.arch.toUpperCase()} · ${META.window_days}-day window · predicts failure `
+    + `within ${META.horizon_days} days · threshold ${fmt(META.threshold)}`;
+  $("#explain").textContent =
+    `The model reads ${META.attributes.length} raw SMART attributes over `
+    + `${META.window_days} continuous days — ${META.n_channels} channels once their 1- and `
+    + `7-day deltas and an observed/imputed mask are added. Test scores: `
+    + `PR-AUC ${fmt(META.metrics.pr_auc)}, ROC-AUC ${fmt(META.metrics.roc_auc)}. `
+    + `The columns below were measured to be proxies for the outcome rather than evidence `
+    + `about it, so they were dropped before training and are never read here — even if `
+    + `your file contains them.`;
+  $("#blocked").innerHTML = META.blocked_columns
+    .map(([c,w]) => `<tr><td class="mono">${c}</td><td class="note">${w}</td></tr>`).join("");
+
+  const s = await (await fetch("/api/samples")).json();
+  const chip = x => `<span class="chip ${x.kind}" data-rel="${x.rel}"
+      ${x.shows ? `title="${x.shows.replace(/"/g,"&quot;")}"` : ""}>${x.label}
+      <span class="note">· ${x.drives} drive${x.drives===1?"":"s"}${
+        x.failures ? `, ${x.failures} failed` : ""}</span></span>`;
+  const ex = s.samples.filter(x => x.kind === "example");
+  const fam = s.samples.filter(x => x.kind !== "example");
+  if (ex.length) $("#examples").innerHTML =
+    `<span class="note">built to demo one behaviour each — hover for what:</span>`
+    + ex.map(chip).join("");
+  if (fam.length) $("#samples").innerHTML =
+    `<span class="note">or a real workbook from <span class="mono">data/Toshiba/</span>:</span>`
+    + fam.map(chip).join("");
+  document.querySelectorAll(".chip").forEach(c =>
+    c.onclick = () => runSample(c.dataset.rel, c.textContent.trim().split("·")[0].trim()));
+
+  // ?sample=<family>/<file.xlsx>&pad=1 scores that example on load, so a particular
+  // run can be bookmarked or handed to someone else.
+  const p = new URLSearchParams(location.search);
+  if (p.get("pad") === "1") $("#pad").checked = true;
+  if (p.get("sample")) runSample(p.get("sample"), p.get("sample"));
+}
+
+function busy(msg) {
+  $("#status").innerHTML = `<div class="card"><span class="spin"></span>${msg}</div>`;
+  $("#out").innerHTML = ""; $("#detail").classList.add("hidden");
+}
+function fail(msg) {
+  $("#status").innerHTML = `<div class="err">${msg}</div>`;
+}
+
+async function send(url, opts, label) {
+  busy(`Reading and scoring <strong>${label}</strong>… a large family workbook can take
+        20–30 seconds.`);
+  try {
+    const r = await fetch(url, opts);
+    const d = await r.json();
+    if (!r.ok || d.error) return fail(d.error || `request failed (${r.status})`);
+    $("#status").innerHTML = "";
+    RESULT = d; render(d);
+  } catch (e) { fail(String(e)); }
+}
+const padOn = () => $("#pad").checked;
+let LAST = null;                      // so the toggle can re-run the same input
+const runFile = f => {
+  LAST = () => runFile(f);
+  const fd = new FormData(); fd.append("file", f); fd.append("pad", padOn() ? "1" : "0");
+  send("/api/predict", {method:"POST", body:fd}, f.name);
+};
+const runSample = (rel, label) => {
+  LAST = () => runSample(rel, label);
+  send("/api/predict-sample",
+    {method:"POST", headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({rel, pad: padOn()})}, label);
+};
+
+function render(d) {
+  const g = d.diagnostics, s = d.summary;
+  const missing = g.attributes_missing;
+
+  const diag = `
+    <div class="card">
+      <div class="row" style="margin-bottom:12px">
+        <strong>${d.source}</strong>
+        <span class="note">parsed and scored in ${d.seconds}s</span>
+      </div>
+      <div class="kpis" style="margin-bottom:14px">
+        <div class="kpi"><div class="n">${g.drives_scored.toLocaleString()}</div>
+          <div class="l">drives scored</div></div>
+        <div class="kpi"><div class="n" style="color:var(--red)">${s.inspect.toLocaleString()}</div>
+          <div class="l">flagged <em>inspect</em></div></div>
+        <div class="kpi"><div class="n" style="color:var(--green)">${s.hold.toLocaleString()}</div>
+          <div class="l">flagged <em>hold</em></div></div>
+        <div class="kpi"><div class="n">${fmt(s.max_risk)}</div>
+          <div class="l">highest risk in file</div></div>
+        <div class="kpi"><div class="n">${g.rows.toLocaleString()}</div>
+          <div class="l">rows read</div></div>
+      </div>
+      <div class="note">
+        <div>window: <span class="mono">${g.date_min} → ${g.date_max}</span></div>
+        <div>SMART attributes found: <strong>${g.attributes_found.length}</strong>
+          of ${META.attributes.length}${missing.length
+            ? ` — <span class="pill warn">missing ${missing.length}</span>
+                <span class="mono">${missing.join(", ")}</span>
+                (filled with the training median, which weakens the prediction)`
+            : ` <span class="pill ok">complete</span>`}</div>
+        ${g.drives_padded ? `<div><span class="pill warn">padded
+            ${g.drives_padded.toLocaleString()}</span> drive(s) had fewer than
+            ${d.window_days} days and were left-padded — those scores are an
+            extrapolation, not a calibrated prediction</div>` : ""}
+        ${g.drives_skipped ? `<div><span class="pill warn">skipped
+            ${g.drives_skipped.toLocaleString()}</span> drive(s) with fewer than
+            ${d.min_days} days — e.g. ${g.skipped_examples
+              .map(x => `<span class="mono">${x.serial}</span> (${x.days}d)`).join(", ")}</div>` : ""}
+        ${g.has_failure_column ? `<div>the file carries a <span class="mono">failure</span>
+            column; it is shown for reference and was <strong>not</strong> given to the
+            model</div>` : ""}
+        ${g.notes.map(n => `<div>${n}</div>`).join("")}
+      </div>
+    </div>`;
+
+  const showOutcome = g.has_failure_column;
+  const table = `
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">
+        <strong>Predictions</strong>
+        <span class="note">highest risk first · <em>inspect</em> means at or above the
+          tuned threshold ${fmt(d.threshold)}</span>
+        <span class="spacer"></span>
+        <button id="csv">download CSV</button>
+      </div>
+      <table><thead><tr>
+        <th style="width:48px">#</th><th>Serial</th><th>Drive model</th>
+        <th style="width:200px">Risk of failure</th><th style="width:96px">Call</th>
+        <th style="width:190px">Window scored</th>
+        ${showOutcome ? '<th style="width:110px">In file</th>' : ""}
+      </tr></thead><tbody>${d.rows.slice(0,500).map(r => `
+        <tr data-serial="${r.serial}">
+          <td class="note">${r.rank}</td>
+          <td class="mono">${r.serial}</td>
+          <td class="note">${r.drive_model}</td>
+          <td><div class="bar"><span class="mono" style="width:52px">${fmt(r.risk)}</span>
+            <span class="track"><span class="fill" style="width:${(r.risk*100).toFixed(1)}%;
+              background:${riskColor(r.risk)}"></span></span></div></td>
+          <td><span class="pill ${r.action==="inspect"?"act":"ok"}">${r.action}</span></td>
+          <td class="note">${r.window_start} → ${r.window_end}
+            ${r.n_padded_days
+              ? `<span class="pill warn">${r.days_available} of ${d.window_days} days</span>`
+              : ""}</td>
+          ${showOutcome ? `<td class="note">${r.recorded_failure
+              ? '<span class="pill act">failed</span>' : "—"}</td>` : ""}
+        </tr>`).join("")}</tbody></table>
+      ${d.rows.length>500 ? `<p class="note">showing the top 500 of
+        ${d.rows.length.toLocaleString()} — use the CSV for the rest</p>` : ""}
+      <p class="note" style="margin-bottom:0">click any row to see the
+        ${d.window_days} days behind its score</p>
+    </div>`;
+
+  $("#out").innerHTML = diag + table;
+  document.querySelectorAll("#out tbody tr").forEach(tr =>
+    tr.onclick = () => showDrive(tr.dataset.serial));
+  $("#csv").onclick = () => downloadCsv(d);
+}
+
+function downloadCsv(d) {
+  const cols = ["rank","serial","drive_model","risk","action","window_start","window_end",
+                "n_real_days","n_filled_days","recorded_failure"];
+  const csv = [cols.join(",")].concat(d.rows.map(r =>
+    cols.map(c => `"${String(r[c]).replace(/"/g,'""')}"`).join(","))).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
+  a.download = d.source.replace(/\.[^.]+$/,"") + "_predictions.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function sparkline(values, w=195, h=38) {
+  const v = values.filter(x => x!=null);
+  if (!v.length) return `<svg width="${w}" height="${h}"></svg>`;
+  const lo=Math.min(...v), hi=Math.max(...v), span=(hi-lo)||1;
+  const pts = values.map((x,i) => x==null ? null :
+    `${((i/Math.max(values.length-1,1))*(w-2)+1).toFixed(1)},${(h-2-((x-lo)/span)*(h-5)).toFixed(1)}`
+  ).filter(Boolean).join(" ");
+  return `<svg width="${w}" height="${h}" style="display:block"><polyline points="${pts}"
+    fill="none" stroke="${hi===lo?'#b9c0c9':'var(--blue)'}" stroke-width="1.6"
+    stroke-linejoin="round"/></svg>`;
+}
+
+async function showDrive(serial) {
+  SEL = serial;
+  document.querySelectorAll("#out tbody tr").forEach(tr =>
+    tr.classList.toggle("sel", tr.dataset.serial === serial));
+  const box = $("#detail"); box.classList.remove("hidden");
+  box.innerHTML = `<span class="spin"></span>loading ${serial}…`;
+
+  const d = await (await fetch(
+    `/api/upload/${RESULT.token}/drive/${encodeURIComponent(serial)}`)).json();
+  if (d.error) { box.innerHTML = `<p class="note">${d.error}</p>`; return; }
+
+  const cards = d.attributes.map(a => {
+    const cur = d.latest[a];
+    return `<div class="spark"><div class="name">${a}</div>
+      <div class="val">${cur==null ? "—" : cur.toLocaleString()}</div>
+      <div class="med">last reading in the window</div>
+      ${sparkline(d.series[a])}</div>`;
+  }).join("");
+
+  box.innerHTML = `
+    <div class="row" style="margin-bottom:4px">
+      <strong class="mono" style="font-size:16px">${d.serial}</strong>
+      <span class="pill ${d.action==="inspect"?"act":"ok"}">${d.action}</span>
+      <span class="note">rank ${d.rank} · ${d.drive_model}</span>
+      <span class="spacer"></span>
+      <span style="font-size:20px;font-weight:650;color:${riskColor(d.risk)}">${fmt(d.risk)}</span>
+    </div>
+    <p class="note" style="margin-top:0">
+      scored from ${d.window_start} → ${d.window_end}
+      (${d.n_real_days} genuine readings${d.n_filled_days
+        ? `, ${d.n_filled_days} forward-filled` : ""})
+      ${d.recorded_failure ? "· the file records this drive as <strong>failed</strong>" : ""}
+    </p>
+    <div class="grid">${cards}</div>
+    <p class="note">Raw reported values across those ${d.dates.length} days.
+      A flat grey line means the counter never moved.</p>`;
+  box.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+const drop = $("#drop"), input = $("#file");
+drop.onclick = () => input.click();
+input.onchange = () => input.files[0] && runFile(input.files[0]);
+["dragenter","dragover"].forEach(e => drop.addEventListener(e, ev => {
+  ev.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(e => drop.addEventListener(e, ev => {
+  ev.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", ev => {
+  const f = ev.dataTransfer.files[0]; if (f) runFile(f); });
+$("#pad").onchange = () => { if (LAST) LAST(); };
+
+boot();
+</script>
+</body>
+</html>

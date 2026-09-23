@@ -1,0 +1,559 @@
+C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\nbformat\validator.py:434: MissingIDFieldWarning: Cell is missing an id field, this will become a hard error in future nbformat versions. You may want to use `normalize()` on your notebooks before validations (available since nbformat 5.1.4). Previous versions of nbformat are fixing this issue transparently, and will stop doing so in the future.
+  _validate(nbdict, ref, version, version_minor, relax_add_props)
+executing Dataset_backblaze_Analysis.ipynb: 19 code cells, timeout 172800s
+C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\zmq\_future.py:718: RuntimeWarning: Proactor event loop does not implement add_reader family of methods required for zmq. Registering an additional selector thread for add_reader support via tornado. Use `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())` to avoid this warning.
+  self._get_loop()
+[IPKernelApp] WARNING | Kernel is running over TCP without encryption. All communication (including code and outputs) is sent in plain text and is susceptible to eavesdropping. Use IPC transport or launch with kernel manager-provisioned CurveZMQ keys to enable transport encryption.
+
+==============================================================================
+[cell 1/19] import gc, json, os, sys, time
+==============================================================================
+torch 2.14.0.dev20260708+cu132 | device cuda
+45 archive shards: 2013 -> Q2_2026
+[cell 1 done in 2.1s]
+
+==============================================================================
+[cell 2/19] t0 = time.time()
+==============================================================================
+  census cached: 512,600 drives
+
+512,600 drives in the archive | 744,525,683 observed drive-days | 33,566 drives with a failure event
+2013-04-10 -> 2026-06-30  (0s)
+[cell 2 done in 0.0s]
+
+==============================================================================
+[cell 3/19] audit_df = ap.sample_audit_frame(cfg0, census, n_drives=15_000)
+==============================================================================
+  [ 1/45] 2013.parquet       152,962 rows kept
+  [ 2/45] 2014.parquet       380,844 rows kept
+  [ 3/45] 2015.parquet       525,518 rows kept
+  [ 4/45] Q1_2016.parquet    164,588 rows kept
+  [ 5/45] Q2_2016.parquet    178,162 rows kept
+  [ 6/45] Q3_2016.parquet    189,768 rows kept
+  [ 7/45] Q4_2016.parquet    192,799 rows kept
+  [ 8/45] Q1_2017.parquet    192,674 rows kept
+  [ 9/45] Q2_2017.parquet    218,871 rows kept
+  [10/45] Q3_2017.parquet    232,707 rows kept
+  [11/45] Q4_2017.parquet    239,403 rows kept
+  [12/45] Q1_2018.parquet    263,072 rows kept
+  [13/45] Q2_2018.parquet    266,758 rows kept
+  [14/45] Q3_2018.parquet    268,390 rows kept
+  [15/45] Q4_2018.parquet    273,023 rows kept
+  [16/45] Q1_2019.parquet    277,370 rows kept
+  [17/45] Q2_2019.parquet    285,591 rows kept
+  [18/45] Q3_2019.parquet    299,677 rows kept
+  [19/45] Q4_2019.parquet    318,139 rows kept
+  [20/45] Q1_2020.parquet    335,857 rows kept
+  [21/45] Q2_2020.parquet    362,905 rows kept
+  [22/45] Q3_2020.parquet    391,859 rows kept
+  [23/45] Q4_2020.parquet    420,116 rows kept
+  [24/45] Q1_2021.parquet    438,432 rows kept
+  [25/45] Q2_2021.parquet    466,047 rows kept
+  [26/45] Q3_2021.parquet    499,593 rows kept
+  [27/45] Q4_2021.parquet    530,626 rows kept
+  [28/45] Q1_2022.parquet    545,513 rows kept
+  [29/45] Q2_2022.parquet    561,662 rows kept
+  [30/45] Q3_2022.parquet    596,361 rows kept
+  [31/45] Q4_2022.parquet    622,529 rows kept
+  [32/45] Q1_2023.parquet    622,556 rows kept
+  [33/45] Q2_2023.parquet    634,244 rows kept
+  [34/45] Q3_2023.parquet    685,926 rows kept
+  [35/45] Q4_2023.parquet    722,131 rows kept
+  [36/45] Q1_2024.parquet    735,434 rows kept
+  [37/45] Q2_2024.parquet    756,806 rows kept
+  [38/45] Q3_2024.parquet    778,048 rows kept
+  [39/45] Q4_2024.parquet    791,864 rows kept
+  [40/45] Q1_2025.parquet    806,254 rows kept
+  [41/45] Q2_2025.parquet    838,151 rows kept
+  [42/45] Q3_2025.parquet    868,235 rows kept
+  [43/45] Q4_2025.parquet    901,168 rows kept
+  [44/45] Q1_2026.parquet    892,179 rows kept
+  [45/45] Q2_2026.parquet    929,828 rows kept
+  audit frame: 21,654,640 drive-days over 15,000 drives, 991 failure events (base rate 0.00458%)
+[cell 3 done in 108.3s]
+
+==============================================================================
+[cell 4/19] report = la.audit_frame(audit_df)
+==============================================================================
+[audit] scoring 23 telemetry columns, 6 identifier/topology columns, and 6 derived record-geometry probes over 21,654,640 drive-days ...
+============================================================================================
+STEP 1 -- TARGET LEAKAGE AND PROXY AUDIT
+============================================================================================
+  drive-days ........... 21,654,640
+  distinct drives ...... 15,000
+  failure events ....... 991 (base rate 0.0046%)
+
+  thresholds: severe if rank-AUC >= 0.95, or 1-threshold balanced acc >= 0.90,
+              or |r| >= 0.50, or missingness gap >= 0.25, or level lift >= 20x
+
+--------------------------------------------------------------------------------------------
+A. TELEMETRY COLUMNS vs failure -- top 12 by rank AUC
+--------------------------------------------------------------------------------------------
+       column coverage  n_unique   corr auc_directional balanced_acc verdict
+smart_187_raw   0.4744       852 0.0306          0.8283       0.8231 suspect
+smart_197_raw   0.9817      1447 0.0467          0.7509       0.7498   clean
+  smart_5_raw   0.9955      7482 0.0224          0.7459       0.7421   clean
+smart_198_raw   0.9863       877 0.0460          0.6893       0.6886   clean
+  smart_4_raw   0.9848      1115 0.0004          0.6330       0.5940   clean
+smart_188_raw   0.4733      4054 0.0038          0.6261       0.6240 suspect
+ smart_12_raw   0.9900       345 0.0008          0.6217       0.5864   clean
+smart_240_raw   0.6728    152594 0.0028          0.6095       0.5892   clean
+smart_193_raw   0.9807    186068 0.0012          0.6082       0.5917   clean
+smart_183_raw   0.1202       333 0.0023          0.6058       0.5939 suspect
+  smart_9_raw   0.9987     82648 0.0022          0.5883       0.5674   clean
+  smart_1_raw   0.9983   7986909 0.0018          0.5788       0.5874   clean
+
+--------------------------------------------------------------------------------------------
+B. MISSINGNESS AS A LEAK CHANNEL -- P(null | failure) vs P(null | healthy)
+--------------------------------------------------------------------------------------------
+       column null_rate null_if_failure null_if_healthy missing_gap verdict
+smart_189_raw    0.7744          0.6468          0.7744     -0.1276 suspect
+smart_184_raw    0.7723          0.6458          0.7723     -0.1265 suspect
+smart_188_raw    0.5267          0.4218          0.5267     -0.1049 suspect
+smart_190_raw    0.5274          0.4228          0.5274     -0.1046 suspect
+smart_187_raw    0.5256          0.4228          0.5256     -0.1028 suspect
+smart_241_raw    0.4795          0.3845          0.4795     -0.0951 suspect
+
+--------------------------------------------------------------------------------------------
+C. IDENTIFIER / TOPOLOGY COLUMNS -- categorical association
+--------------------------------------------------------------------------------------------
+        column  cardinality cramers_v max_lift verdict
+capacity_bytes           35    0.0054  18.7404 suspect
+      vault_id          266    0.0048   7.3380 suspect
+  pod_slot_num           60    0.0032   1.5095 suspect
+    datacenter            6    0.0016   1.4048   clean
+        pod_id           20    0.0010   1.3138   clean
+    cluster_id            7    0.0015   1.0954   clean
+
+--------------------------------------------------------------------------------------------
+D. RECORD-GEOMETRY PROBES -- features a naive engineering step would build
+--------------------------------------------------------------------------------------------
+  [per drive-day]  target = failure flag on that day
+                            column auc_directional balanced_acc    corr     verdict
+               days_to_last_record          0.9907       0.9855 -0.0087 SEVERE LEAK
+days_from_record_end_to_export_end          0.8424       0.8288  0.0088       clean
+     still_reporting_at_export_end          0.8283       0.8283 -0.0094       clean
+                record_length_days          0.7439       0.6808 -0.0063       clean
+           days_since_first_record          0.5675       0.5569  0.0017       clean
+                calendar_day_index          0.5503       0.5497 -0.0016       clean
+
+  [per drive]  target = drive ever failed
+                            column auc_directional balanced_acc    corr verdict
+     still_reporting_at_export_end          0.8675       0.8675 -0.3943 suspect
+days_from_record_end_to_export_end          0.8475       0.8679  0.2731   clean
+                record_length_days          0.5859       0.5768 -0.0738   clean
+
+
+============================================================================================
+VERDICT
+============================================================================================
+  1 column(s) flagged SEVERE -- dropped from X before preprocessing:
+    - days_to_last_record          rank AUC 0.991 on its own -- reproduces the label
+
+  12 column(s) flagged SUSPECT -- also excluded, see reasons:
+    - still_reporting_at_export_end rank AUC 0.868 -- unusually high for telemetry
+    - smart_187_raw                missingness gap 0.103 between failure and healthy days
+    - smart_188_raw                missingness gap 0.105 between failure and healthy days
+    - smart_183_raw                missingness gap 0.093 between failure and healthy days
+    - smart_242_raw                missingness gap 0.095 between failure and healthy days
+    - smart_189_raw                missingness gap 0.128 between failure and healthy days
+    - smart_241_raw                missingness gap 0.095 between failure and healthy days
+    - smart_190_raw                missingness gap 0.105 between failure and healthy days
+    - smart_184_raw                missingness gap 0.127 between failure and healthy days
+    - vault_id                     a single level carries 7.3x the base failure rate
+    - pod_slot_num                 missingness gap 0.212 between failure and healthy days
+    - capacity_bytes               a single level carries 18.7x the base failure rate
+
+  blocklist (16 names) enforced by LeakageReport.assert_clean():
+    capacity_bytes, date, days_to_last_record, failure, pod_slot_num, serial_number, smart_183_raw, smart_184_raw, smart_187_raw, smart_188_raw, smart_189_raw, smart_190_raw, smart_241_raw, smart_242_raw, still_reporting_at_export_end, vault_id
+============================================================================================
+[cell 4 done in 107.9s]
+
+==============================================================================
+[cell 5/19] features = la.select_feature_columns(audit_df, report)
+==============================================================================
+15 attributes survive coverage >= 50% and the blocklist:
+
+  smart_197_raw      coverage  98.17%     1,447 distinct  rank AUC 0.7509
+  smart_5_raw        coverage  99.55%     7,482 distinct  rank AUC 0.7459
+  smart_198_raw      coverage  98.63%       877 distinct  rank AUC 0.6893
+  smart_4_raw        coverage  98.48%     1,115 distinct  rank AUC 0.6330
+  smart_12_raw       coverage  99.00%       345 distinct  rank AUC 0.6217
+  smart_240_raw      coverage  67.28%   152,594 distinct  rank AUC 0.6095
+  smart_193_raw      coverage  98.07%   186,068 distinct  rank AUC 0.6082
+  smart_9_raw        coverage  99.87%    82,648 distinct  rank AUC 0.5883
+  smart_1_raw        coverage  99.83%  7,986,909 distinct  rank AUC 0.5788
+  smart_7_raw        coverage  98.48%  8,976,066 distinct  rank AUC 0.5750
+  smart_3_raw        coverage  98.48%     3,826 distinct  rank AUC 0.5490
+  smart_194_raw      coverage  99.87%        58 distinct  rank AUC 0.5222
+  smart_199_raw      coverage  98.67%       968 distinct  rank AUC 0.5158
+  smart_192_raw      coverage  98.63%    14,907 distinct  rank AUC 0.5021
+  smart_10_raw       coverage  98.23%        12 distinct  rank AUC 0.5002
+[leakage guard] 15 feature columns checked against a 16-name blocklist -- clean.
+[cell 5 done in 0.0s]
+
+==============================================================================
+[cell 6/19] la.plot_audit(report, save_path=f"{FIG_DIR}/step1_leakage_audit.png")
+==============================================================================
+  saved results/figures/step1_leakage_audit.png
+C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\scripts\leakage_audit.py:618: UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
+  plt.show()
+<Figure size 1650x990 with 4 Axes>
+[cell 6 done in 0.6s]
+
+==============================================================================
+[cell 7/19] del audit_df; gc.collect()
+==============================================================================
+40
+[cell 7 done in 0.1s]
+
+==============================================================================
+[cell 8/19] cfg = ap.ArchiveConfig(
+==============================================================================
+========================================================================================
+STEP A -- DRIVE CENSUS
+========================================================================================
+  census cached: 512,600 drives
+
+========================================================================================
+STEP B -- DENSE LAYOUT
+========================================================================================
+  508,653 drives kept, 3,947 dropped (shorter than 30 days)
+  752,397,855 dense drive-days (744,456,164 observed, 7,941,691 forward-filled)
+  matrix 752,397,855 x 46 float32 = 138.4 GB memory-mapped
+
+========================================================================================
+STEP C -- EXTERNAL SORT INTO 64 BUCKETS
+========================================================================================
+  buckets cached
+
+========================================================================================
+STEP D -- DENSIFY
+========================================================================================
+  dense matrix cached
+
+ArchiveSeriesStore: 508,653 drives, 752,397,855 dense drive-days, 46 channels (138 GB memory-mapped), 32,707 drives with a failure event
+[cell 8 done in 0.1s]
+
+==============================================================================
+[cell 9/19] # Stride 1 everywhere -- training, validation and test all see every p
+==============================================================================
+
+grouped split by drive id -- no drive appears in two splits:
+  train  345,884 drives  (22,241 carry a failure, 6.43%)
+  val     61,039 drives  (3,925 carry a failure, 6.43%)
+  test   101,730 drives  (6,541 carry a failure, 6.43%)
+  scaler cached -- matrix already standardised in place
+
+Window datasets (window_days=30, horizon_days=30, stride_days=1):
+  train | random spd 4   |    1,383,536 windows | 345,884 drives | positive rate  1.3208% (measured, 22,241 failing drives)
+  val   | enumerate stride 1  |   88,632,676 windows |  61,039 drives | positive rate  0.1381% (122,444 positive windows)
+  test  | enumerate stride 1  |  147,297,386 windows | 101,730 drives | positive rate  0.1382% (203,507 positive windows)
+
+Raw pos_weight from the training positive rate: 74.7
+[cell 9 done in 0.3s]
+
+==============================================================================
+[cell 10/19] rows = []
+==============================================================================
+       drives drives with a failure dense drive-days every possible 30-day window windows this split uses batches
+split                                                                                                            
+train 345,884                22,241      511,747,492                  501,716,856               1,383,536     338
+val    61,039                 3,925       90,402,807                   88,632,676              88,632,676  21,639
+test  101,730                 6,541      150,247,556                  147,297,386             147,297,386  35,962
+
+test split enumerates every one of 147,297,386 possible windows in 35,962 batches of 4096
+[cell 10 done in 0.0s]
+
+==============================================================================
+[cell 11/19] timeline = ap.sample_window_timeline(store, bundle.splits, n_per_drive
+==============================================================================
+========================================================================================
+STEP 2 -- RANDOM 30-DAY CONTINUOUS WINDOW SAMPLING
+========================================================================================
+  windows drawn ........ 240,000 over 120,000 drives
+  positive windows ..... 1,206 (0.5025%)
+  start dates .......... 2013-04-10 .. 2026-06-01  (4,801 distinct start days)
+  end dates ............ 2013-05-09 .. 2026-06-30
+  calendar span ........ 30..30 days -- every window is exactly 30 continuous days
+  genuine readings ..... mean 29.7/30 days per window (0.3 forward-filled)
+  quarter-aligned ...... 1.010% of starts land on one of the 52 quarter boundaries (uniform expectation 1.083%)
+  month-aligned ........ 3.393% (uniform expectation 3.291%)
+                         starts are NOT snapped to a calendar grid
+  distinct start days .. 4,801 of 4,801 calendar days in range
+  weekday spread ....... Fri 14.3%, Mon 14.4%, Sat 14.3%, Sun 14.4%, Thu 14.3%, Tue 14.2%, Wed 14.1%
+   split  drive_index start_date   end_date  start_offset_days  start_fraction_of_life  drive_record_days  n_real_days  n_filled_days  n_padded_days  label
+0  train            0 2026-05-26 2026-06-24               1438                0.995845               1474           30              0              0      0
+1  train            0 2022-08-16 2022-09-14                 59                0.040859               1474           30              0              0      0
+2  train            5 2022-09-29 2022-10-28                434                0.244507               1805           30              0              0      0
+3  train            5 2024-06-17 2024-07-16               1061                0.597746               1805           28              2              0      0
+4  train            6 2023-10-07 2023-11-05                687                0.415106               1685           30              0              0      0
+5  train            6 2024-10-09 2024-11-07               1055                0.637462               1685           30              0              0      0
+6  train           19 2024-12-05 2025-01-03                771                0.586758               1344           30              0              0      0
+7  train           19 2025-08-27 2025-09-25               1036                0.788432               1344           30              0              0      0
+[cell 11 done in 1.0s]
+
+==============================================================================
+[cell 12/19] ap.plot_window_timeline(timeline, cfg, coverage=coverage,
+==============================================================================
+  saved results/figures/step2_window_timeline.png
+C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\scripts\archive_window_pipeline.py:1586: UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
+  plt.show()
+<Figure size 1980x880 with 6 Axes>
+[cell 12 done in 0.9s]
+
+==============================================================================
+[cell 13/19] device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+==============================================================================
+input (2, 30, 46) -> (2, 1)  (one logit per window)
+136,769 trainable parameters on cuda
+[cell 13 done in 0.4s]
+
+==============================================================================
+[cell 14/19] model, history, best_val = ap.train_archive_model(model, loaders, bund
+==============================================================================
+Loss: BCEWithLogitsLoss(pos_weight=1.0)  [requested]
+========================================================================================
+TRAINING -- CNN, 136,769 parameters, up to 12 epochs, early stop after 3 without a val PR-AUC gain
+  338 training batches/epoch, 21,639 validation batches/epoch
+========================================================================================
+epoch | train loss |  val loss | val PR-AUC | val ROC-AUC | val F1@.5 |       lr |     sec
+------+------------+-----------+------------+-------------+-----------+----------+--------
+      epoch 1 training  19.8%  loss 0.12042
+      epoch 1 training  39.6%  loss 0.09472
+      epoch 1 training  59.5%  loss 0.08543
+      epoch 1 training  79.3%  loss 0.08086
+      epoch 1 training  99.1%  loss 0.07795
+    1 |    0.07790 |   0.02252 |     0.0973 |      0.8626 |    0.1835 | 1.00e-03 |   684.2  <- best
+      epoch 2 training  19.8%  loss 0.06607
+      epoch 2 training  39.6%  loss 0.06565
+      epoch 2 training  59.5%  loss 0.06489
+      epoch 2 training  79.3%  loss 0.06494
+      epoch 2 training  99.1%  loss 0.06500
+    2 |    0.06500 |   0.02293 |     0.1101 |      0.8649 |    0.1910 | 1.00e-03 |  1368.0  <- best
+      epoch 3 training  19.8%  loss 0.06535
+      epoch 3 training  39.6%  loss 0.06510
+      epoch 3 training  59.5%  loss 0.06481
+      epoch 3 training  79.3%  loss 0.06477
+      epoch 3 training  99.1%  loss 0.06459
+    3 |    0.06461 |   0.02341 |     0.1164 |      0.8653 |    0.1856 | 1.00e-03 |  1828.6  <- best
+      epoch 4 training  19.8%  loss 0.06431
+      epoch 4 training  39.6%  loss 0.06397
+      epoch 4 training  59.5%  loss 0.06362
+      epoch 4 training  79.3%  loss 0.06372
+      epoch 4 training  99.1%  loss 0.06383
+    4 |    0.06381 |   0.02262 |     0.1107 |      0.8693 |    0.1848 | 1.00e-03 |  2010.1
+      epoch 5 training  19.8%  loss 0.06390
+      epoch 5 training  39.6%  loss 0.06409
+      epoch 5 training  59.5%  loss 0.06422
+      epoch 5 training  79.3%  loss 0.06395
+      epoch 5 training  99.1%  loss 0.06369
+    5 |    0.06363 |   0.02252 |     0.1167 |      0.8671 |    0.1879 | 1.00e-03 |  1756.9  <- best
+      epoch 6 training  19.8%  loss 0.06303
+      epoch 6 training  39.6%  loss 0.06291
+      epoch 6 training  59.5%  loss 0.06317
+      epoch 6 training  79.3%  loss 0.06312
+      epoch 6 training  99.1%  loss 0.06296
+    6 |    0.06303 |   0.02300 |     0.1217 |      0.8687 |    0.1945 | 1.00e-03 |  1898.5  <- best
+      epoch 7 training  19.8%  loss 0.06207
+      epoch 7 training  39.6%  loss 0.06250
+      epoch 7 training  59.5%  loss 0.06290
+      epoch 7 training  79.3%  loss 0.06284
+      epoch 7 training  99.1%  loss 0.06266
+    7 |    0.06265 |   0.01907 |     0.1237 |      0.8670 |    0.1912 | 1.00e-03 |  2086.5  <- best
+      epoch 8 training  19.8%  loss 0.06230
+      epoch 8 training  39.6%  loss 0.06202
+      epoch 8 training  59.5%  loss 0.06242
+      epoch 8 training  79.3%  loss 0.06283
+      epoch 8 training  99.1%  loss 0.06301
+    8 |    0.06301 |   0.02472 |     0.1212 |      0.8710 |    0.1932 | 1.00e-03 |  2114.5
+      epoch 9 training  19.8%  loss 0.06303
+      epoch 9 training  39.6%  loss 0.06236
+      epoch 9 training  59.5%  loss 0.06197
+      epoch 9 training  79.3%  loss 0.06206
+      epoch 9 training  99.1%  loss 0.06213
+    9 |    0.06211 |   0.02390 |     0.1173 |      0.8669 |    0.2001 | 1.00e-03 |  2198.4
+      epoch 10 training  19.8%  loss 0.06207
+      epoch 10 training  39.6%  loss 0.06187
+      epoch 10 training  59.5%  loss 0.06208
+      epoch 10 training  79.3%  loss 0.06217
+      epoch 10 training  99.1%  loss 0.06210
+   10 |    0.06209 |   0.02146 |     0.1195 |      0.8704 |    0.1968 | 1.00e-03 |  2105.1
+early stopping at epoch 10 (best val PR-AUC 0.1237)
+
+Best validation PR-AUC 0.1237 at epoch 7
+[cell 14 done in 18056.6s]
+
+==============================================================================
+[cell 15/19] bw.plot_training_history(history, save_path=f"{FIG_DIR}/step3_training
+==============================================================================
+  saved results/figures/step3_training_history.png
+C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\scripts\backblaze_window_pipeline.py:2301: UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
+  plt.show()
+<Figure size 1650x462 with 3 Axes>
+[cell 15 done in 1.1s]
+
+==============================================================================
+[cell 16/19] results = ap.evaluate_archive_final(model, loaders, bundle, tcfg, devi
+==============================================================================
+========================================================================================
+FINAL VALIDATION PASS -- every window at stride 1
+========================================================================================
+    val: 1/21,639 batches (  0.0%)  15,044 windows/s
+    val: 1,082/21,639 batches (  5.0%)  31,502 windows/s
+    val: 2,163/21,639 batches ( 10.0%)  32,113 windows/s
+    val: 3,244/21,639 batches ( 15.0%)  32,097 windows/s
+    val: 4,325/21,639 batches ( 20.0%)  32,073 windows/s
+    val: 5,406/21,639 batches ( 25.0%)  33,721 windows/s
+    val: 6,487/21,639 batches ( 30.0%)  35,414 windows/s
+    val: 7,568/21,639 batches ( 35.0%)  36,722 windows/s
+    val: 8,649/21,639 batches ( 40.0%)  37,699 windows/s
+    val: 9,730/21,639 batches ( 45.0%)  38,663 windows/s
+    val: 10,811/21,639 batches ( 50.0%)  39,228 windows/s
+    val: 11,892/21,639 batches ( 55.0%)  39,792 windows/s
+    val: 12,973/21,639 batches ( 60.0%)  40,138 windows/s
+    val: 14,054/21,639 batches ( 64.9%)  40,511 windows/s
+    val: 15,135/21,639 batches ( 69.9%)  40,854 windows/s
+    val: 16,216/21,639 batches ( 74.9%)  41,136 windows/s
+    val: 17,297/21,639 batches ( 79.9%)  41,092 windows/s
+    val: 18,378/21,639 batches ( 84.9%)  41,286 windows/s
+    val: 19,459/21,639 batches ( 89.9%)  41,459 windows/s
+    val: 20,540/21,639 batches ( 94.9%)  41,706 windows/s
+    val: 21,621/21,639 batches ( 99.9%)  41,946 windows/s
+  best F1 threshold .... 0.639360  (val F1 0.2133) over 88,632,676 windows
+
+========================================================================================
+TEST PASS -- every window at stride 1
+========================================================================================
+    test: 1/35,962 batches (  0.0%)  42,292 windows/s
+    test: 1,799/35,962 batches (  5.0%)  35,965 windows/s
+    test: 3,597/35,962 batches ( 10.0%)  35,723 windows/s
+    test: 5,395/35,962 batches ( 15.0%)  35,508 windows/s
+    test: 7,193/35,962 batches ( 20.0%)  34,171 windows/s
+    test: 8,991/35,962 batches ( 25.0%)  33,287 windows/s
+    test: 10,789/35,962 batches ( 30.0%)  34,455 windows/s
+    test: 12,587/35,962 batches ( 35.0%)  35,585 windows/s
+    test: 14,385/35,962 batches ( 40.0%)  37,116 windows/s
+    test: 16,183/35,962 batches ( 45.0%)  40,361 windows/s
+    test: 17,981/35,962 batches ( 50.0%)  43,231 windows/s
+    test: 19,779/35,962 batches ( 55.0%)  46,056 windows/s
+    test: 21,577/35,962 batches ( 60.0%)  48,715 windows/s
+    test: 23,375/35,962 batches ( 65.0%)  51,198 windows/s
+    test: 25,173/35,962 batches ( 70.0%)  53,562 windows/s
+    test: 26,971/35,962 batches ( 75.0%)  55,831 windows/s
+    test: 28,769/35,962 batches ( 80.0%)  57,982 windows/s
+    test: 30,567/35,962 batches ( 85.0%)  59,980 windows/s
+    test: 32,365/35,962 batches ( 90.0%)  61,929 windows/s
+    test: 34,163/35,962 batches ( 95.0%)  63,783 windows/s
+    test: 35,961/35,962 batches (100.0%)  65,568 windows/s
+========================================================================================
+TEST @ threshold 0.5
+========================================================================================
+  windows evaluated .... 147,297,386  (203,507 positive, base rate 0.138%)
+  PR-AUC ............... 0.1230   (a random ranker scores 0.0014)
+  ROC-AUC .............. 0.8609
+  threshold ............ 0.5000
+  precision ............ 0.1424
+  recall ............... 0.3152
+  F1 ................... 0.1962
+  confusion ............ TP 64136  FP 386240  FN 139371  TN 146707639
+========================================================================================
+TEST @ tuned threshold 0.639360
+========================================================================================
+  windows evaluated .... 147,297,386  (203,507 positive, base rate 0.138%)
+  PR-AUC ............... 0.1230   (a random ranker scores 0.0014)
+  ROC-AUC .............. 0.8609
+  threshold ............ 0.6394
+  precision ............ 0.2098
+  recall ............... 0.2196
+  F1 ................... 0.2146
+  confusion ............ TP 44683  FP 168332  FN 158824  TN 146925547
+========================================================================================
+TEST CONFUSION MATRIX @ 0.639360   (threshold 0.6394)
+========================================================================================
+                       predicted 0    predicted 1
+    actual 0      146,925,547        168,332   <- 168,332 false alarms
+    actual 1          158,824         44,683   <- 44,683 caught, 158,824 missed
+
+    TP 44,683   FP 168,332   TN 146,925,547   FN 158,824
+    precision  TP/(TP+FP) = 0.2098   (168,332 wasted call-outs per 44,683 real catches)
+    recall     TP/(TP+FN) = 0.2196   (158,824 failures went unflagged)
+    false-alarm rate FP/(FP+TN) = 0.0011
+========================================================================================
+TEST PRECISION@K -- ranking windows
+========================================================================================
+  147,297,386 items ranked, 203,507 positive (base rate 0.138%)
+       K |   hits |  precision |    best |  recall@K |     lift
+  -------+--------+------------+---------+-----------+---------
+      10 |      9 |     0.9000 |  1.0000 |    0.0000 |   651.4x
+      25 |     22 |     0.8800 |  1.0000 |    0.0001 |   636.9x
+      50 |     45 |     0.9000 |  1.0000 |    0.0002 |   651.4x
+     100 |     91 |     0.9100 |  1.0000 |    0.0004 |   658.7x
+     250 |    208 |     0.8320 |  1.0000 |    0.0010 |   602.2x
+    1000 |    782 |     0.7820 |  1.0000 |    0.0038 |   566.0x
+========================================================================================
+TEST PRECISION@K -- ranking DRIVES (each drive scored by its worst window)
+========================================================================================
+  101,730 items ranked, 6,541 positive (base rate 6.430%)
+       K |   hits |  precision |    best |  recall@K |     lift
+  -------+--------+------------+---------+-----------+---------
+      10 |      9 |     0.9000 |  1.0000 |    0.0014 |    14.0x
+      25 |     24 |     0.9600 |  1.0000 |    0.0037 |    14.9x
+      50 |     48 |     0.9600 |  1.0000 |    0.0073 |    14.9x
+     100 |     91 |     0.9100 |  1.0000 |    0.0139 |    14.2x
+     250 |    228 |     0.9120 |  1.0000 |    0.0349 |    14.2x
+    1000 |    857 |     0.8570 |  1.0000 |    0.1310 |    13.3x
+========================================================================================
+SUMMARY
+========================================================================================
+  val   @tuned           PR-AUC 0.1237 | ROC-AUC 0.8670 | P 0.2115 | R 0.2152 | F1 0.2133 | thr 0.6394 | TP 26346 FP 98195 FN 96098 TN 88412037
+  test  @0.50            PR-AUC 0.1230 | ROC-AUC 0.8609 | P 0.1424 | R 0.3152 | F1 0.1962 | thr 0.5000 | TP 64136 FP 386240 FN 139371 TN 146707639
+  test  @tuned           PR-AUC 0.1230 | ROC-AUC 0.8609 | P 0.2098 | R 0.2196 | F1 0.2146 | thr 0.6394 | TP 44683 FP 168332 FN 158824 TN 146925547
+[cell 16 done in 4650.4s]
+
+==============================================================================
+[cell 17/19] ap.plot_evaluation(results, ks=(10, 25, 50, 100, 250, 1000),
+==============================================================================
+  curves drawn from 4,000,000 of 147,297,386 test windows (uniform subsample; all printed metrics use the full pass)
+  saved results/figures/step3_evaluation.png
+C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\scripts\backblaze_window_pipeline.py:2376: UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
+  plt.show()
+<Figure size 2090x462 with 4 Axes>
+[cell 17 done in 2.9s]
+
+==============================================================================
+[cell 18/19] print("Highest-risk drives in the test split (each scored by its worst
+==============================================================================
+Highest-risk drives in the test split (each scored by its worst window):
+
+ rank serial_number     risk  actually_failed
+    1      S1F03TCS 0.999997                1
+    2      W1F09AKF 0.999982                1
+    3      S1F0AAQA 0.999892                0
+    4      ZLW18S0J 0.999892                1
+    5      Z305GVK2 0.999892                1
+    6      S1F0CTVX 0.999890                1
+    7      ZHZ39HP6 0.999882                1
+    8      ZHZ3PJXJ 0.999875                1
+    9      ZLW0H2T5 0.999871                1
+   10      ZHZ5GPWY 0.999862                1
+   11      ZL2L803G 0.999844                1
+   12      W1F09X4B 0.999844                1
+   13      Z302BV6W 0.999842                1
+   14      ZA12DPQ7 0.999818                1
+   15      W1F0A67D 0.999818                1
+   16      Z305D63V 0.999804                1
+   17      S1F04DF3 0.999792                1
+   18      Z302A0MB 0.999788                1
+   19      S1F030XE 0.999770                1
+   20      S1F032SM 0.999756                1
+[cell 18 done in 0.0s]
+
+==============================================================================
+[cell 19/19] os.makedirs("models", exist_ok=True); os.makedirs("results", exist_ok=
+==============================================================================
+Saved models/backblaze_archive30_cnn.pth and models/backblaze_archive30_preprocessing_config.json
+wrote results/archive30_*.csv and results/archive30_summary.json
+[cell 19 done in 0.5s]
+
+wrote Dataset_backblaze_Analysis.ipynb -- total 22936.7s

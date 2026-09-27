@@ -45,6 +45,7 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 import torch
+from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -2117,3 +2118,210 @@ def grow_tree_to_full_accuracy(X_tr, y_tr, X_te, y_te, depths=None,
                       f"{clf.get_depth()} with {clf.get_n_leaves():,} leaves")
             break
     return best, pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# 15. Architecture / hyper-parameter search
+# ---------------------------------------------------------------------------
+
+# The list of options a search draws from. `dilations` is the interesting one: one
+# temporal block per entry, so its length IS the CNN's layer count and its values set
+# the receptive field. Over a 30-day window a five-block 1-16 stack already sees far
+# more than 30 days, so shorter stacks are not obviously worse -- which is exactly what
+# the search is for.
+CNN_SEARCH_SPACE: dict[str, list] = {
+    "dilations": [
+        (1, 2),                    # 2 blocks, receptive field  13 days
+        (1, 2, 4),                 # 3 blocks,                   29
+        (1, 2, 4, 8),              # 4 blocks,                   61
+        (1, 2, 4, 8, 16),          # 5 blocks,                  125  (the current default)
+        (1, 2, 4, 8, 16, 32),      # 6 blocks,                  253
+        (1, 1, 2, 2, 4, 4),        # 6 blocks, shallow dilation growth
+    ],
+    "hidden_dim": [32, 64, 96, 128],
+    "dropout": [0.1, 0.2, 0.3],
+    "lr": [3e-4, 1e-3, 3e-3],
+    "kernel_size": [3, 5],
+    "weight_decay": [1e-5, 1e-4],
+    "train_positive_ratio": [0.15, 0.25, 0.40],
+}
+
+
+def _receptive_field(dilations, kernel_size: int) -> int:
+    """Days the stack can see. Two convs per block, so each block adds 2*d*(k-1)."""
+    return 1 + sum(2 * d * (kernel_size - 1) for d in dilations)
+
+
+def iter_search_configs(space: dict, mode: str = "random", n_trials: int = 20,
+                        seed: int = 42) -> list[dict]:
+    """The trial list: every combination for `grid`, or `n_trials` draws for `random`.
+
+    Random is the default because the grid here is 2,592 points and a random subset of
+    20 explores each individual knob far better than an exhaustive sweep of a few of
+    them would -- the usual argument for random over grid search.
+    """
+    keys = list(space)
+    if mode == "grid":
+        import itertools
+        combos = [dict(zip(keys, v)) for v in itertools.product(*(space[k] for k in keys))]
+        rng = np.random.default_rng(seed)
+        rng.shuffle(combos)                      # so a truncated grid is still varied
+        return combos[:n_trials] if n_trials else combos
+    if mode != "random":
+        raise ValueError("mode must be 'grid' or 'random'")
+
+    rng = np.random.default_rng(seed)
+    out, seen = [], set()
+    while len(out) < n_trials and len(seen) < 20 * n_trials:
+        pick = {k: space[k][int(rng.integers(len(space[k])))] for k in keys}
+        sig = tuple(sorted((k, str(v)) for k, v in pick.items()))
+        if sig in seen:
+            continue
+        seen.add(sig)
+        out.append(pick)
+    return out
+
+
+@torch.no_grad()
+def _quick_val(model, loader, device) -> tuple[float, float]:
+    """(PR-AUC, ROC-AUC) on a validation loader -- no loss, no confusion matrix."""
+    from sklearn.metrics import average_precision_score, roc_auc_score
+    model.eval()
+    ps, ys = [], []
+    for xb, yb, _ in loader:
+        xb = xb.to(device, non_blocking=True)
+        ps.append(torch.sigmoid(model(xb)).squeeze(1).float().cpu().numpy())
+        ys.append(yb.squeeze(1).numpy().astype(np.int8))
+    p = np.concatenate(ps)
+    y = np.concatenate(ys)
+    if not (0 < y.sum() < len(y)):
+        return float("nan"), float("nan")
+    return float(average_precision_score(y, p)), float(roc_auc_score(y, p))
+
+
+def cnn_search(cfg: ArchiveConfig, store: ArchiveSeriesStore, splits: dict,
+               space: dict | None = None, mode: str = "random", n_trials: int = 20,
+               epochs: int = 3, val_stride: int = 30, seed: int = 42,
+               device: torch.device | None = None, out_csv: str | None = None,
+               verbose: bool = True) -> pd.DataFrame:
+    """Train a short run per configuration and rank them by validation PR-AUC.
+
+    Every trial is scored on the **same** validation windows, enumerated once at
+    `val_stride`. A coarser stride than the final evaluation is deliberate: model
+    selection only needs the ordering of the candidates to be right, and enumerating
+    every stride-1 validation window for each of twenty trials would cost more than the
+    whole rest of the project. The winner is then re-trained and evaluated under the
+    full protocol.
+
+    PR-AUC, not accuracy or loss: at a 0.24% positive rate accuracy is meaningless and
+    the loss moves with the imbalance correction rather than with the ranking.
+    """
+    space = space or CNN_SEARCH_SPACE
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    trials = iter_search_configs(space, mode=mode, n_trials=n_trials, seed=seed)
+
+    val_ds = EnumeratedWindows(store, splits["val"], batch_size=cfg.batch_size,
+                               stride=val_stride, split_name="val")
+    val_loader = DataLoader(val_ds, batch_size=None, shuffle=False, num_workers=0,
+                            pin_memory=(device.type == "cuda"))
+    if verbose:
+        print(_RULE)
+        print(f"CNN SEARCH -- {mode}, {len(trials)} trials x {epochs} epochs")
+        print(_RULE)
+        print(f"  options offered:")
+        for k, v in space.items():
+            print(f"    {k:<22} {v}")
+        print(f"  grid size ............ "
+              f"{int(np.prod([len(v) for v in space.values()])):,} combinations")
+        print(f"  scored on ............ {val_ds.n_windows:,} validation windows "
+              f"(stride {val_stride}, {int(val_ds.labels.sum()):,} positive), "
+              f"identical for every trial")
+        print(f"  ranked by ............ validation PR-AUC")
+        print(_RULE, flush=True)
+
+    rows = []
+    for i, t in enumerate(trials, 1):
+        t0 = time.time()
+        bw.set_seed(seed)
+        tcfg = bw.TrainConfig(
+            arch="cnn", hidden_dim=t["hidden_dim"], dropout=t["dropout"],
+            dilations=tuple(t["dilations"]), kernel_size=t["kernel_size"],
+            batch_size=cfg.batch_size, lr=t["lr"], weight_decay=t["weight_decay"],
+            max_epochs=epochs, loss="bce", sampler="none", num_workers=0, seed=seed,
+        )
+        train_ds = RandomWindows(
+            store, splits["train"], samples_per_drive=cfg.samples_per_drive,
+            positive_ratio=t["train_positive_ratio"], batch_size=cfg.batch_size,
+            seed=seed, split_name="train")
+        train_loader = DataLoader(train_ds, batch_size=None, shuffle=False,
+                                  num_workers=0, pin_memory=(device.type == "cuda"))
+
+        model = bw.build_model(store.n_channels, cfg.window_days, tcfg).to(device)
+        crit = nn.BCEWithLogitsLoss()
+        opt = torch.optim.Adam(model.parameters(), lr=tcfg.lr,
+                               weight_decay=tcfg.weight_decay)
+        best_pr, best_roc, best_ep = -1.0, float("nan"), 0
+        for ep in range(1, epochs + 1):
+            train_ds.set_epoch(ep)
+            model.train()
+            for xb, yb, _ in train_loader:
+                xb, yb = xb.to(device, non_blocking=True), yb.to(device, non_blocking=True)
+                opt.zero_grad(set_to_none=True)
+                loss = crit(model(xb), yb)
+                loss.backward()
+                opt.step()
+            pr, roc = _quick_val(model, val_loader, device)
+            if np.isfinite(pr) and pr > best_pr:
+                best_pr, best_roc, best_ep = pr, roc, ep
+
+        row = {
+            "trial": i,
+            "layers": len(t["dilations"]),
+            "dilations": "-".join(str(d) for d in t["dilations"]),
+            "kernel_size": t["kernel_size"],
+            "receptive_field_days": _receptive_field(t["dilations"], t["kernel_size"]),
+            "hidden_dim": t["hidden_dim"],
+            "dropout": t["dropout"],
+            "lr": t["lr"],
+            "weight_decay": t["weight_decay"],
+            "train_positive_ratio": t["train_positive_ratio"],
+            "parameters": bw.count_parameters(model),
+            "val_pr_auc": best_pr,
+            "val_roc_auc": best_roc,
+            "best_epoch": best_ep,
+            "seconds": time.time() - t0,
+        }
+        rows.append(row)
+        if verbose:
+            print(f"  [{i:>2}/{len(trials)}] {row['layers']}L "
+                  f"dil {row['dilations']:<12} k{row['kernel_size']} "
+                  f"h{row['hidden_dim']:<4} drop {row['dropout']:.1f} "
+                  f"lr {row['lr']:.0e} pos {row['train_positive_ratio']:.2f} | "
+                  f"{row['parameters']:>8,} par | PR-AUC {best_pr:.4f} "
+                  f"ROC {best_roc:.4f} | {row['seconds']:.0f}s", flush=True)
+        del model, opt, train_loader, train_ds
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+
+    table = (pd.DataFrame(rows).sort_values("val_pr_auc", ascending=False)
+             .reset_index(drop=True))
+    table.index += 1
+    if out_csv:
+        table.to_csv(out_csv, index=False)
+        if verbose:
+            print(f"\n  wrote {out_csv}")
+    return table
+
+
+def best_train_config(table: pd.DataFrame, cfg: ArchiveConfig, max_epochs: int = 6,
+                      patience: int = 2, seed: int = 42) -> tuple[bw.TrainConfig, dict]:
+    """Turn the winning search row back into a TrainConfig for the real run."""
+    b = table.iloc[0]
+    tcfg = bw.TrainConfig(
+        arch="cnn", hidden_dim=int(b.hidden_dim), dropout=float(b.dropout),
+        dilations=tuple(int(d) for d in str(b.dilations).split("-")),
+        kernel_size=int(b.kernel_size), batch_size=cfg.batch_size, lr=float(b.lr),
+        weight_decay=float(b.weight_decay), max_epochs=max_epochs, patience=patience,
+        loss="bce", sampler="none", num_workers=0, seed=seed,
+    )
+    return tcfg, {"train_positive_ratio": float(b.train_positive_ratio)}

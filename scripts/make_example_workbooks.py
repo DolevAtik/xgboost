@@ -1,39 +1,44 @@
-"""Generate six example workbooks for the prediction app, into `data/examples/`.
+"""Generate the example workbooks for the prediction app, into `data/examples/`.
 
     python scripts/make_example_workbooks.py
+    python scripts/make_example_workbooks.py --run backblaze_window90
 
-Every row is real telemetry lifted out of `data/toshiba_drivestats.parquet` -- nothing
-is synthesised. What varies between the files is the *shape of the input*, so that each
-one exercises a different path through the app:
+Every row is real telemetry lifted out of `data/toshiba_drivestats.parquet` -- nothing is
+synthesised. What varies between the files is the *shape of the input*, so each one
+exercises a different path through the app:
 
     01  one healthy drive, full window        the quiet case
     02  one drive on its way out              the loud case
     03  a small mixed fleet                   ranking, with blocked columns included
     04  truncated windows                     the "partial window" checkbox
-    05  only 5 of the 16 attributes           the missing-column warning
+    05  a handful of attributes               the missing-column warning
     06  renamed headers, no failure column    the column-alias mapping
 
-Drives are chosen by scoring the real fleet with the trained model first, so file 01
-really is a drive the model is relaxed about and file 02 really is one it is not.
+Everything model-shaped is read from the run the app serves, via `webapp/scoring.py`:
+which attributes to write out, how long a full window is, how short "too short" is, and
+which drives are interesting. Hard-coding any of that is what made the previous set of
+files quietly wrong when the model moved from a 90-day window over 16 attributes to a
+30-day window over 15 -- the workbooks kept their old columns, so four of the new model's
+inputs were median-filled on every single example.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
 
 import numpy as np
 import pandas as pd
-import torch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
+sys.path.insert(0, os.path.join(ROOT, "webapp"))
 
-import backblaze_window_pipeline as bw  # noqa: E402
+import scoring  # noqa: E402
 
 PARQUET = os.path.join(ROOT, "data", "toshiba_drivestats.parquet")
-PREFIX = os.path.join(ROOT, "models", "backblaze_window90")
 OUT_DIR = os.path.join(ROOT, "data", "examples")
 
 # Carried through to the workbooks even though the model never reads them: the app's
@@ -41,12 +46,17 @@ OUT_DIR = os.path.join(ROOT, "data", "examples")
 BLOCKED_PASSENGERS = ["capacity_bytes", "vault_id", "pod_slot_num", "datacenter"]
 
 
-def score_fleet():
-    """Every drive's most recent 90 days, scored -- the basis for picking examples."""
-    model, config = bw.load_artifacts(PREFIX, torch.device("cpu"))
-    attrs = list(config["feature_names"][: config["base_feature_count"]])
+def score_fleet(run: scoring.Run):
+    """Every drive's most recent window, scored -- the basis for picking examples.
 
-    print("reading the parquet ...")
+    Scored with the run's own primary estimator, so file 01 really is a drive the app is
+    relaxed about and file 02 really is one it is not.
+    """
+    contract = run.contract
+    attrs = list(contract.base_features)
+    est = run.primary
+
+    print(f"reading {os.path.basename(PARQUET)} ...")
     raw = pd.read_parquet(
         PARQUET,
         columns=["date", "serial_number", "model", "failure"] + attrs + BLOCKED_PASSENGERS)
@@ -57,12 +67,10 @@ def score_fleet():
     for c in attrs:
         frame[c] = pd.to_numeric(frame[c], errors="coerce").astype("float32")
 
-    print("building the daily calendar and scoring ...")
-    cfg = bw.data_config_from_saved(config)
-    store = bw.DriveSeriesStore(frame, cfg)
-    store.apply_scaling(config["feature_medians"], config["feature_mean"],
-                        config["feature_std"])
-    risk = bw.score_latest_windows(model, store, torch.device("cpu"))
+    print(f"building the daily calendar and scoring with {est.label} "
+          f"({contract.window_days}-day window) ...")
+    store = contract.build_store(frame, contract.data_config())
+    risk = est.score(store)
 
     fleet = pd.DataFrame({
         "serial": np.asarray(store.drive_ids, dtype=object).astype(str),
@@ -76,8 +84,7 @@ def score_fleet():
 
 def last_days(raw: pd.DataFrame, serial: str, n: int) -> pd.DataFrame:
     """That drive's final `n` calendar days, in order."""
-    d = raw[raw.serial_number == serial].sort_values("date")
-    return d.tail(n)
+    return raw[raw.serial_number == serial].sort_values("date").tail(n)
 
 
 MANIFEST: list[dict] = []
@@ -98,33 +105,46 @@ def write(df: pd.DataFrame, name: str, note: str, label: str = "",
     })
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--run", default=os.environ.get("RUN", "backblaze_2022x_w30"),
+                    help="artifact prefix to build the examples against")
+    args = ap.parse_args(argv)
+
+    runs = scoring.discover(verbose=False)
+    if args.run not in runs:
+        raise SystemExit(f"no run {args.run!r}; found {', '.join(runs) or 'none'}")
+    run = runs[args.run]
+    window = run.contract.window_days
+    floor = max(10, window // 3)        # the app's floor when padding is allowed
+
     os.makedirs(OUT_DIR, exist_ok=True)
-    raw, attrs, fleet = score_fleet()
+    raw, attrs, fleet = score_fleet(run)
     cols = ["date", "serial_number", "model", "failure"] + attrs
 
-    long_enough = fleet[fleet.days >= 90]
+    long_enough = fleet[fleet.days >= window]
     failing = long_enough[long_enough.failed == 1]
     healthy = long_enough[long_enough.failed == 0]
 
-    print(f"\nfleet scored: {len(fleet):,} drives "
-          f"({int(fleet.failed.sum()):,} failed). writing to {OUT_DIR} ...\n")
+    print(f"\nfleet scored: {len(fleet):,} drives ({int(fleet.failed.sum()):,} failed) "
+          f"against {run.key} / {run.primary.label}. writing to {OUT_DIR} ...\n")
 
     # 01 -- a healthy drive the model is relaxed about.
     quiet = healthy.iloc[-1]
-    write(last_days(raw, quiet.serial, 90)[cols],
+    write(last_days(raw, quiet.serial, window)[cols],
           "01_single_drive_healthy.xlsx",
           f"risk {quiet.risk:.3f}, never failed",
           label="1 - healthy drive",
-          shows="the quiet case: one drive, a clean 90 days, scored near zero")
+          shows=f"the quiet case: one drive, a clean {window} days, scored near zero")
 
-    # 02 -- a drive the model is loud about, on its final 90 days.
+    # 02 -- a drive the model is loud about, on its final window.
     loud = failing.iloc[0]
-    write(last_days(raw, loud.serial, 90)[cols],
+    write(last_days(raw, loud.serial, window)[cols],
           "02_single_drive_failing.xlsx",
           f"risk {loud.risk:.3f}, failed",
           label="2 - failing drive",
-          shows="the loud case: the final 90 days of a drive that died, scored near one")
+          shows=f"the loud case: the final {window} days of a drive that died, scored "
+                f"near one")
 
     # 03 -- a mixed fleet, spread across the risk range so the ranking has work to do,
     # and carrying the blocked columns to prove they are ignored.
@@ -132,37 +152,47 @@ def main() -> None:
         failing.head(4), failing.iloc[len(failing) // 2: len(failing) // 2 + 2],
         healthy.head(3), healthy.iloc[len(healthy) // 2: len(healthy) // 2 + 3],
     ]).drop_duplicates("serial")
-    mixed = pd.concat([last_days(raw, s, 90) for s in picks.serial])
+    mixed = pd.concat([last_days(raw, s, window) for s in picks.serial])
+    n_mixed, n_failed = len(picks), int(picks.failed.sum())
     write(mixed[cols + [c for c in BLOCKED_PASSENGERS if c in mixed.columns]],
           "03_small_fleet_mixed.xlsx",
-          f"{len(picks)} drives, {int(picks.failed.sum())} failed, + blocked columns",
+          f"{n_mixed} drives, {n_failed} failed, + blocked columns",
           label="3 - mixed fleet",
-          shows="ranking across 12 drives; the file also carries capacity_bytes, "
-                "vault_id, pod_slot_num and datacenter, none of which the model reads")
+          shows=f"ranking across {n_mixed} drives; the file also carries capacity_bytes, "
+                f"vault_id, pod_slot_num and datacenter, none of which the model reads")
 
-    # 04 -- windows cut short, the way a drive that dies mid-quarter really looks.
-    # Needs the "also score drives with a partial window" checkbox to score at all.
+    # 04 -- windows cut short, the way a drive that dies mid-quarter really looks. The
+    # lengths straddle the window so the "also score drives with a partial window"
+    # checkbox has something to change: below it, a drive is skipped outright.
     short_picks = pd.concat([failing.iloc[4:9], healthy.iloc[3:6]]).drop_duplicates("serial")
-    lengths = [41, 55, 68, 77, 84, 90, 90, 62]
+    fractions = [0.40, 0.60, 0.75, 0.85, 0.95, 1.00, 1.00, 0.50]
+    lengths = [max(floor, int(round(f * window))) for f in fractions]
     parts = [last_days(raw, s, n) for s, n in zip(short_picks.serial, lengths)]
+    used = lengths[: len(parts)]
+    n_short = sum(1 for n in used if n < window)
+    n_full = len(parts) - n_short
     write(pd.concat(parts)[cols],
           "04_partial_windows.xlsx",
-          f"{len(parts)} drives, {sum(1 for n in lengths[:len(parts)] if n < 90)} shorter than 90 days",
+          f"{len(parts)} drives, {n_short} shorter than {window} days",
           label="4 - partial windows",
-          shows="drives cut short mid-window: only 2 score by default, all 8 with "
-                "'also score drives with a partial window' ticked")
+          shows=f"drives cut short mid-window: only {n_full} score by default, all "
+                f"{len(parts)} with 'also score drives with a partial window' ticked")
 
-    # 05 -- a file from a source that only reports a handful of attributes.
-    few = ["smart_5_raw", "smart_9_raw", "smart_194_raw", "smart_197_raw", "smart_198_raw"]
+    # 05 -- a file from a source that only reports a handful of attributes. Chosen from
+    # the run's own list, so the warning is about genuinely absent inputs.
+    preferred = ["smart_5_raw", "smart_9_raw", "smart_194_raw", "smart_197_raw",
+                 "smart_198_raw"]
+    few = [c for c in preferred if c in attrs] or attrs[:5]
     write(mixed[["date", "serial_number", "model", "failure"] + few],
           "05_missing_smart_columns.xlsx",
           f"only {len(few)} of {len(attrs)} attributes present",
           label="5 - missing columns",
-          shows="the same 12 drives with 11 of the 16 attributes absent: it still "
-                "scores, warns, and the top risk falls from 0.997 to 0.752")
+          shows=f"the same {n_mixed} drives with {len(attrs) - len(few)} of the "
+                f"{len(attrs)} attributes absent: it still scores, and warns that the "
+                f"rest were filled with the training median")
 
-    # 06 -- a file that calls its columns something else and has no ground truth,
-    # which is what a genuinely unseen file looks like.
+    # 06 -- a file that calls its columns something else and has no ground truth, which
+    # is what a genuinely unseen file looks like.
     renamed = mixed[["date", "serial_number"] + attrs].rename(
         columns={"date": "time", "serial_number": "serial"})
     write(renamed, "06_renamed_columns.xlsx",

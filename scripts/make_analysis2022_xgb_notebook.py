@@ -310,11 +310,90 @@ balanced sampler *and* a large `pos_weight` — is the mistake documented in
 meaningless: predicting "healthy" every time scores over 99.8%.
 """)
 
+md(r"""
+### Choosing the architecture by experiment, not by assumption
+
+The CNN's shape was previously a guess: five temporal blocks, 64 channels, dropout 0.2.
+`scripts/run_cnn_search.py` replaces the guess with a search. It is handed a **list of
+options** -- `ap.CNN_SEARCH_SPACE` -- and runs one short training run per configuration,
+ranking them on the **same** validation windows:
+
+| option | values offered |
+|---|---|
+| `dilations` | 2 to 6 blocks: `1-2`, `1-2-4`, `1-2-4-8`, `1-2-4-8-16`, `1-2-4-8-16-32`, `1-1-2-2-4-4` |
+| `hidden_dim` | 32, 64, 96, 128 |
+| `dropout` | 0.1, 0.2, 0.3 |
+| `lr` | 3e-4, 1e-3, 3e-3 |
+| `kernel_size` | 3, 5 |
+| `weight_decay` | 1e-5, 1e-4 |
+| `train_positive_ratio` | 0.15, 0.25, 0.40 |
+
+Each `dilations` entry is one temporal block, so the search **adds and removes layers**
+as well as resizing them. The full grid is 2,592 combinations; the run below is a random
+sample of it, which explores each individual knob far better than an exhaustive sweep of
+a few of them would.
+
+The cell loads the cached result if the search has already been run; pass
+`--trials`/`--epochs` to `scripts/run_cnn_search.py` to redo it.
+""")
+
+code(r"""
+SEARCH_CSV = "results/w2022x_cnn_search.csv"
+if os.path.exists(SEARCH_CSV):
+    search = pd.read_csv(SEARCH_CSV)
+    print(f"loaded {len(search)} cached trials from {SEARCH_CSV}")
+else:
+    search = ap.cnn_search(cfg, store, bundle.splits, mode="random", n_trials=30,
+                           epochs=3, val_stride=30, seed=SEED, out_csv=SEARCH_CSV)
+
+show = ["layers", "dilations", "kernel_size", "hidden_dim", "dropout", "lr",
+        "weight_decay", "train_positive_ratio", "parameters", "val_pr_auc",
+        "val_roc_auc"]
+print()
+print("top 10 configurations by validation PR-AUC:")
+print()
+print(search[show].head(10).to_string(index=False))
+print()
+print("how depth alone scores (median over the trials at each layer count):")
+print(search.groupby("layers")["val_pr_auc"].agg(["count", "median", "max"])
+      .round(4).to_string())
+""")
+
+code(r"""
+best = search.iloc[0]
+BEST_DILATIONS = tuple(int(d) for d in str(best.dilations).split("-"))
+print(f"winner: {int(best.layers)} layers, dilations {best.dilations}, "
+      f"kernel {int(best.kernel_size)}, hidden {int(best.hidden_dim)}, "
+      f"dropout {best.dropout}, lr {best.lr:g}, wd {best.weight_decay:g}, "
+      f"positive_ratio {best.train_positive_ratio}")
+print(f"  {int(best.parameters):,} parameters, search val PR-AUC {best.val_pr_auc:.4f}")
+
+prev = search[(search.layers == 5) & (search.hidden_dim == 64)
+              & (search.kernel_size == 3)]
+if len(prev):
+    print(f"  the previous hand-picked shape (5 layers, hidden 64, kernel 3) scored "
+          f"{prev.val_pr_auc.max():.4f} -> "
+          f"{100*(best.val_pr_auc/prev.val_pr_auc.max()-1):+.1f}%")
+
+# The sampler's positive ratio was searched too, so the training set is rebuilt if the
+# winner disagrees with the ratio the bundle was constructed with.
+if float(best.train_positive_ratio) != cfg.train_positive_ratio:
+    bundle.datasets["train"] = ap.RandomWindows(
+        store, bundle.splits["train"], samples_per_drive=cfg.samples_per_drive,
+        positive_ratio=float(best.train_positive_ratio), batch_size=cfg.batch_size,
+        seed=SEED, split_name="train")
+    print(f"  rebuilt the training sampler at positive_ratio "
+          f"{float(best.train_positive_ratio)} (was {cfg.train_positive_ratio})")
+""")
+
 code(r"""
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Architecture and optimiser settings come from the search above, not from a guess.
 tcfg = bw.TrainConfig(
-    arch="cnn", hidden_dim=64, dropout=0.2,
-    batch_size=cfg.batch_size, lr=1e-3, max_epochs=6, patience=2,
+    arch="cnn", hidden_dim=int(best.hidden_dim), dropout=float(best.dropout),
+    dilations=BEST_DILATIONS, kernel_size=int(best.kernel_size),
+    batch_size=cfg.batch_size, lr=float(best.lr),
+    weight_decay=float(best.weight_decay), max_epochs=6, patience=2,
     loss="bce", sampler="none",
     # num_workers=0 on purpose: a batch is ~23 MB and worker IPC costs several times
     # what the gather itself does -- 8 workers measured 7x slower than none.

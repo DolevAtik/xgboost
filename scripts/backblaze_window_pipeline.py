@@ -156,6 +156,10 @@ class TrainConfig:
     arch: str = "cnn"                # cnn | gru | transformer
     hidden_dim: int = 64
     dropout: float = 0.2
+    # CNN depth: one temporal block per entry, so this is the layer count *and* the
+    # receptive field. Defaults reproduce the original five-block 1-16 stack.
+    dilations: tuple[int, ...] = (1, 2, 4, 8, 16)
+    kernel_size: int = 3
     batch_size: int = 256
     lr: float = 1e-3
     weight_decay: float = 1e-5
@@ -1402,11 +1406,13 @@ class CNN1DWindowClassifier(nn.Module):
     """
 
     def __init__(self, num_features: int, window_days: int = 90, hidden_dim: int = 64,
-                 dropout: float = 0.2, dilations: Sequence[int] = (1, 2, 4, 8, 16)):
+                 dropout: float = 0.2, dilations: Sequence[int] = (1, 2, 4, 8, 16),
+                 kernel_size: int = 3):
         super().__init__()
         blocks, in_ch = [], num_features
         for d in dilations:
-            blocks.append(TemporalBlock(in_ch, hidden_dim, dilation=d, dropout=dropout))
+            blocks.append(TemporalBlock(in_ch, hidden_dim, dilation=d,
+                                        kernel_size=kernel_size, dropout=dropout))
             in_ch = hidden_dim
         self.blocks = nn.Sequential(*blocks)
         self.head = nn.Sequential(
@@ -1486,10 +1492,13 @@ ARCHITECTURES = {
 def build_model(num_features: int, window_days: int, tcfg: TrainConfig) -> nn.Module:
     if tcfg.arch not in ARCHITECTURES:
         raise ValueError(f"arch must be one of {sorted(ARCHITECTURES)}, got {tcfg.arch!r}")
-    return ARCHITECTURES[tcfg.arch](
-        num_features=num_features, window_days=window_days,
-        hidden_dim=tcfg.hidden_dim, dropout=tcfg.dropout,
-    )
+    kwargs = dict(num_features=num_features, window_days=window_days,
+                  hidden_dim=tcfg.hidden_dim, dropout=tcfg.dropout)
+    if tcfg.arch == "cnn":
+        # Only the CNN has a dilation stack; the GRU and transformer ignore it.
+        kwargs["dilations"] = tuple(tcfg.dilations)
+        kwargs["kernel_size"] = int(tcfg.kernel_size)
+    return ARCHITECTURES[tcfg.arch](**kwargs)
 
 
 def count_parameters(model: nn.Module) -> int:

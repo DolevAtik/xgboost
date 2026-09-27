@@ -7,72 +7,130 @@
 <style>
   :root {
     --bg:#f6f7f9; --card:#fff; --ink:#1c2024; --muted:#6b7280; --line:#e2e5ea;
-    --blue:#3b6ea5; --red:#c1442e; --amber:#d99a2b; --green:#4f7d3a;
+    --soft:#fbfcfd; --hover:#eef1f5; --sel:#e6eef7;
+    --blue:#3b6ea5; --red:#c1442e; --amber:#d99a2b; --green:#4f7d3a; --grey:#96a0ac;
+    --okbg:#eaf1e6; --actbg:#fbe9e5; --warnbg:#fdf3e0; --warnink:#8a6414;
+    --errbg:#fdece8; --errline:#f0c3b8; --errink:#8c2f1c;
   }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#14171b; --card:#1b1f24; --ink:#e6e9ed; --muted:#98a2ae; --line:#2b3138;
+      --soft:#1f242a; --hover:#242a31; --sel:#243444;
+      --blue:#6fa3d8; --red:#e2755c; --amber:#e0ae52; --green:#8ab86a; --grey:#6b7683;
+      --okbg:#22301f; --actbg:#3a2220; --warnbg:#362c17; --warnink:#e0ae52;
+      --errbg:#3a201c; --errline:#5d3229; --errink:#f0b0a0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#14171b; --card:#1b1f24; --ink:#e6e9ed; --muted:#98a2ae; --line:#2b3138;
+    --soft:#1f242a; --hover:#242a31; --sel:#243444;
+    --blue:#6fa3d8; --red:#e2755c; --amber:#e0ae52; --green:#8ab86a; --grey:#6b7683;
+    --okbg:#22301f; --actbg:#3a2220; --warnbg:#362c17; --warnink:#e0ae52;
+    --errbg:#3a201c; --errline:#5d3229; --errink:#f0b0a0;
+  }
+
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:14px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
-  header { background:var(--card); border-bottom:1px solid var(--line); padding:14px 20px;
-           display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
-  h1 { font-size:17px; margin:0; font-weight:650; }
+  header { background:var(--card); border-bottom:1px solid var(--line);
+           padding:12px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+           position:sticky; top:0; z-index:5; }
+  h1 { font-size:16px; margin:0; font-weight:650; letter-spacing:-.01em; }
+  h2 { font-size:13px; margin:0 0 10px; font-weight:650; }
   .sub { color:var(--muted); font-size:12.5px; }
-  main { max-width:1120px; margin:0 auto; padding:20px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:8px;
-          padding:16px; margin-bottom:16px; }
+  main { max-width:1180px; margin:0 auto; padding:18px 20px 60px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:9px;
+          padding:16px; margin-bottom:14px; }
   .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .spacer { flex:1; }
   .note { color:var(--muted); font-size:12.5px; }
-  .mono { font-family:"SF Mono",Consolas,"Courier New",monospace; font-size:13px; }
+  .mono { font-family:"SF Mono",Consolas,"Courier New",monospace; font-size:12.5px; }
   .hidden { display:none; }
+  a { color:var(--blue); }
 
-  /* upload */
-  #drop { border:2px dashed #c6ccd5; border-radius:10px; padding:34px 20px; text-align:center;
-          background:#fbfcfd; cursor:pointer; transition:.12s; }
-  #drop:hover, #drop.over { border-color:var(--blue); background:#f0f5fa; }
-  #drop .big { font-size:16px; font-weight:600; margin-bottom:4px; }
-  button { padding:7px 13px; border:1px solid var(--line); background:var(--card);
-           border-radius:6px; cursor:pointer; font:inherit; font-size:13.5px; color:var(--ink); }
-  button:hover { background:#eef1f5; }
+  /* controls */
+  button, select { padding:6px 12px; border:1px solid var(--line); background:var(--card);
+           border-radius:6px; cursor:pointer; font:inherit; font-size:13px; color:var(--ink); }
+  button:hover, select:hover { background:var(--hover); }
   button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
   button:disabled { opacity:.5; cursor:default; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:6px;
+         overflow:hidden; }
+  .seg button { border:0; border-radius:0; border-right:1px solid var(--line);
+                padding:6px 13px; }
+  .seg button:last-child { border-right:0; }
+  .seg button.on { background:var(--sel); color:var(--ink); font-weight:600; }
   .chip { border:1px solid var(--line); background:var(--card); border-radius:999px;
           padding:5px 12px; cursor:pointer; font-size:12.5px; }
-  .chip:hover { background:#eef1f5; border-color:var(--blue); }
-  .chip.example { background:#f2f7fc; border-color:#c3d6e8; }
-  .chip.example:hover { background:#e6eef7; }
+  .chip:hover { background:var(--hover); border-color:var(--blue); }
+  .chip.example { background:var(--sel); border-color:var(--line); }
+
+  #drop { border:2px dashed var(--line); border-radius:10px; padding:30px 20px;
+          text-align:center; background:var(--soft); cursor:pointer; transition:.12s; }
+  #drop:hover, #drop.over { border-color:var(--blue); background:var(--sel); }
+  #drop .big { font-size:16px; font-weight:600; margin-bottom:4px; }
 
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
-  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); }
-  th { font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+  th,td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line);
+          vertical-align:middle; }
+  th { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
        font-weight:600; }
-  tbody tr { cursor:pointer; }
-  tbody tr:hover { background:#f0f4f8; }
-  tbody tr.sel { background:#e6eef7; }
-  .bar { display:flex; align-items:center; gap:8px; }
-  .bar .track { display:block; flex:1; height:7px; background:#e9ecf1; border-radius:4px;
-                overflow:hidden; min-width:70px; }
-  .bar .fill { display:block; height:100%; border-radius:4px; }
+  td.num, th.num { text-align:right; }
+  tbody tr.click { cursor:pointer; }
+  tbody tr.click:hover { background:var(--hover); }
+  tbody tr.sel { background:var(--sel); }
+
+  .bar { position:relative; height:9px; background:var(--line); border-radius:5px;
+         min-width:72px; overflow:visible; }
+  .bar .fill { position:absolute; inset:0 auto 0 0; border-radius:5px; }
+  .bar .thr { position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--ink);
+              opacity:.45; }
   .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px;
-          font-weight:600; }
-  .pill.act { background:#fbe9e5; color:var(--red); }
-  .pill.ok  { background:#eaf1e6; color:var(--green); }
-  .pill.warn{ background:#fdf3e0; color:#8a6414; }
-  .kpis { display:flex; gap:24px; flex-wrap:wrap; }
-  .kpi .n { font-size:21px; font-weight:650; font-variant-numeric:tabular-nums; }
+          font-weight:600; white-space:nowrap; }
+  .pill.act { background:var(--actbg); color:var(--red); }
+  .pill.ok  { background:var(--okbg); color:var(--green); }
+  .pill.warn{ background:var(--warnbg); color:var(--warnink); }
+  .pill.tag { background:var(--sel); color:var(--muted); font-weight:500; }
+
+  .kpis { display:flex; gap:26px; flex-wrap:wrap; }
+  .kpi .n { font-size:20px; font-weight:650; font-variant-numeric:tabular-nums;
+            line-height:1.25; }
   .kpi .l { font-size:11.5px; color:var(--muted); }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:12px; }
-  .spark { border:1px solid var(--line); border-radius:6px; padding:8px 10px; }
-  .spark .name { font-size:11.5px; color:var(--muted);
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
+  .spark { border:1px solid var(--line); border-radius:6px; padding:8px 10px;
+           background:var(--soft); }
+  .spark .name { font-size:11px; color:var(--muted);
                  font-family:"SF Mono",Consolas,monospace; }
   .spark .val { font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
-  .spark .med { font-size:11px; color:var(--muted); }
-  .err { background:#fdece8; border:1px solid #f0c3b8; color:#8c2f1c; border-radius:8px;
-         padding:12px 14px; }
-  details summary { cursor:pointer; font-weight:600; }
-  .spin { display:inline-block; width:14px; height:14px; border:2px solid #cfd6df;
+  .spark .med { font-size:10.5px; color:var(--muted); }
+
+  .panes { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }
+  .mcard { border:1px solid var(--line); border-radius:8px; padding:12px 14px;
+           background:var(--soft); }
+  .mcard.on { border-color:var(--blue); box-shadow:0 0 0 1px var(--blue) inset; }
+  .mcard .hd { display:flex; align-items:baseline; gap:8px; margin-bottom:8px; }
+  .mcard .hd strong { font-size:14px; }
+  .mstats { display:flex; gap:18px; flex-wrap:wrap; margin:8px 0 6px; }
+  .mstats div { font-size:11.5px; color:var(--muted); }
+  .mstats b { display:block; font-size:15px; color:var(--ink); font-weight:650;
+              font-variant-numeric:tabular-nums; }
+
+  .contrib { display:grid; grid-template-columns:1fr auto; gap:2px 10px; align-items:center; }
+  .contrib .cname { font-family:"SF Mono",Consolas,monospace; font-size:11.5px; }
+  .cbar { position:relative; height:13px; width:100%; }
+  .cbar i { position:absolute; top:2px; height:9px; border-radius:2px; display:block; }
+  .cbar .axis { position:absolute; top:0; bottom:0; width:1px; background:var(--line); }
+
+  .err { background:var(--errbg); border:1px solid var(--errline); color:var(--errink);
+         border-radius:8px; padding:12px 14px; }
+  details summary { cursor:pointer; font-weight:600; font-size:13px; }
+  details[open] summary { margin-bottom:10px; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line);
           border-top-color:var(--blue); border-radius:50%; animation:sp .8s linear infinite;
           vertical-align:-2px; margin-right:7px; }
   @keyframes sp { to { transform:rotate(360deg); } }
+  .swatch { display:inline-block; width:9px; height:9px; border-radius:2px;
+            vertical-align:0; margin-right:4px; }
 </style>
 </head>
 <body>
@@ -80,108 +138,302 @@
 <header>
   <h1>Drive Failure Prediction</h1>
   <span class="sub" id="hdr">loading…</span>
+  <span class="spacer"></span>
+  <button id="theme" title="light / dark">◐</button>
 </header>
 
 <main>
 
+  <!-- ============================ the model ============================ -->
+  <div class="card" id="modelcard">
+    <div class="row" style="margin-bottom:12px">
+      <h2 style="margin:0">Model</h2>
+      <select id="runpick"></select>
+      <span class="pill tag" id="runtag"></span>
+      <span class="spacer"></span>
+      <span class="note">score with</span>
+      <span class="seg" id="kindpick"></span>
+    </div>
+    <p class="note" id="runnote" style="margin:0 0 12px"></p>
+    <div class="panes" id="mcards"></div>
+    <div id="modeldetails" style="margin-top:14px"></div>
+  </div>
+
+  <!-- ============================ the input ============================ -->
   <div class="card">
     <div id="drop">
-      <div class="big">Drop a 90-day telemetry file here</div>
-      <div class="note">or click to choose &nbsp;·&nbsp; <span class="mono">.xlsx</span>
-        or <span class="mono">.csv</span> &nbsp;·&nbsp; one drive or a whole family</div>
-      <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv" class="hidden">
+      <div class="big" id="droptitle">Drop a telemetry file here</div>
+      <div class="note" id="dropnote"></div>
+      <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.parquet" class="hidden">
     </div>
-    <label class="row" style="margin-top:14px; cursor:pointer; gap:7px">
+    <label class="row" style="margin-top:13px; cursor:pointer; gap:7px">
       <input type="checkbox" id="pad">
       <span>Also score drives with a partial window</span>
-      <span class="note">— a drive that stopped reporting partway through has fewer than
-        90 days. Off, it is skipped; on, it is left-padded to 90 and scored anyway, and
-        the result is marked <span class="pill warn">partial</span>. In a historical file
-        the drives that failed are usually the short ones.</span>
+      <span class="note" id="padnote"></span>
     </label>
-    <div class="row" style="margin-top:14px" id="examples"></div>
-    <div class="row" style="margin-top:10px" id="samples"></div>
-    <p class="note" style="margin-bottom:0; margin-top:12px">
-      The file needs a <span class="mono">date</span> column, a
-      <span class="mono">serial_number</span> column, and at least
-      <span class="mono">90</span> consecutive days per drive. Missing SMART columns are
-      filled with the training-set median — the panel below reports exactly which ones
-      were found. Nothing is uploaded anywhere; it is parsed in this process and dropped.
-    </p>
+    <div class="row" style="margin-top:13px" id="examples"></div>
+    <div class="row" style="margin-top:8px" id="samples"></div>
+    <p class="note" style="margin:12px 0 0" id="inputrules"></p>
   </div>
 
   <div id="status"></div>
   <div id="out"></div>
   <div class="card hidden" id="detail"></div>
 
-  <div class="card">
-    <details>
-      <summary>What the model reads — and what it is forbidden to read</summary>
-      <p class="note" id="explain" style="margin-bottom:10px"></p>
-      <table><thead><tr>
-        <th style="width:290px">Blocked column</th><th>Why it was dropped</th>
-      </tr></thead><tbody id="blocked"></tbody></table>
-    </details>
-  </div>
-
 </main>
 
 <script>
 const $ = s => document.querySelector(s);
-let META = null, RESULT = null, SEL = null;
-const fmt = (x,d=3) => x==null ? "—" : Number(x).toFixed(d);
-const riskColor = r => r>=.66 ? "var(--red)" : r>=.33 ? "var(--amber)" : "var(--green)";
+const $$ = s => Array.from(document.querySelectorAll(s));
+let META = null, RUN = null, KINDS = [], RESULT = null, LAST = null;
 
+const fmt = (x,d=3) => (x==null || Number.isNaN(x)) ? "—" : Number(x).toFixed(d);
+const pct = x => x==null ? "—" : (100*x).toFixed(1) + "%";
+const num = x => x==null ? "—" : Number(x).toLocaleString();
+const esc = s => String(s).replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const COLOR = { xgb:"var(--red)", cnn:"var(--blue)" };
+const kindColor = k => COLOR[k] || "var(--grey)";
+const est = k => RUN.estimators.find(e => e.kind === k);
+const compact = n => n==null ? "—"
+  : n >= 1e9 ? (n/1e9).toFixed(1)+"B" : n >= 1e6 ? (n/1e6).toFixed(0)+"M"
+  : n >= 1e3 ? (n/1e3).toFixed(0)+"k" : String(n);
+
+/* ---------------------------------------------------------------- theme */
+const applyTheme = t => {
+  if (t) document.documentElement.setAttribute("data-theme", t);
+  else document.documentElement.removeAttribute("data-theme");
+};
+applyTheme(localStorage.getItem("theme"));
+$("#theme").onclick = () => {
+  const now = document.documentElement.getAttribute("data-theme");
+  const next = now === "dark" ? "light" : now === "light" ? "" : "dark";
+  next ? localStorage.setItem("theme", next) : localStorage.removeItem("theme");
+  applyTheme(next);
+  if (RESULT) render(RESULT);
+};
+
+/* ----------------------------------------------------------------- boot */
 async function boot() {
   META = await (await fetch("/api/meta")).json();
-  $("#hdr").textContent =
-    `${META.arch.toUpperCase()} · ${META.window_days}-day window · predicts failure `
-    + `within ${META.horizon_days} days · threshold ${fmt(META.threshold)}`;
-  $("#explain").textContent =
-    `The model reads ${META.attributes.length} raw SMART attributes over `
-    + `${META.window_days} continuous days — ${META.n_channels} channels once their 1- and `
-    + `7-day deltas and an observed/imputed mask are added. Test scores: `
-    + `PR-AUC ${fmt(META.metrics.pr_auc)}, ROC-AUC ${fmt(META.metrics.roc_auc)}. `
-    + `The columns below were measured to be proxies for the outcome rather than evidence `
-    + `about it, so they were dropped before training and are never read here — even if `
-    + `your file contains them.`;
-  $("#blocked").innerHTML = META.blocked_columns
-    .map(([c,w]) => `<tr><td class="mono">${c}</td><td class="note">${w}</td></tr>`).join("");
+  const pick = $("#runpick");
+  pick.innerHTML = META.runs.map(r =>
+    `<option value="${r.key}" ${r.key===META.active?"selected":""}>${esc(r.label)}</option>`
+  ).join("");
+  pick.onchange = () => selectRun(pick.value);
+  selectRun(META.active);
+}
 
-  const s = await (await fetch("/api/samples")).json();
-  const chip = x => `<span class="chip ${x.kind}" data-rel="${x.rel}"
-      ${x.shows ? `title="${x.shows.replace(/"/g,"&quot;")}"` : ""}>${x.label}
+function selectRun(key) {
+  RUN = META.runs.find(r => r.key === key) || META.runs[0];
+  KINDS = [RUN.default];
+  renderModel();
+  loadSamples();
+  $("#out").innerHTML = ""; $("#status").innerHTML = "";
+  $("#detail").classList.add("hidden");
+  RESULT = null;
+}
+
+/* --------------------------------------------------------- the model card */
+function renderModel() {
+  const w = RUN.window_days, h = RUN.horizon_days;
+  $("#hdr").textContent =
+    `${w}-day window · predicts failure within ${h} days · `
+    + `${RUN.attributes.length} SMART attributes → ${RUN.n_channels} channels`;
+  $("#runtag").textContent = RUN.tag;
+  $("#runnote").innerHTML =
+    `<strong>${esc(RUN.scope)}.</strong> ${esc(RUN.note)}`
+    + (RUN.n_drives ? ` <span class="mono">${num(RUN.n_drives)} drives, `
+        + `${compact(RUN.n_drive_days)} drive-days</span>` : "");
+
+  // estimator toggles
+  const seg = $("#kindpick");
+  const all = RUN.estimators.map(e => e.kind);
+  seg.innerHTML = RUN.estimators.map(e =>
+    `<button data-kind="${e.kind}" class="${KINDS.includes(e.kind)?"on":""}">
+       <span class="swatch" style="background:${kindColor(e.kind)}"></span>${e.label}</button>`
+  ).join("") + (all.length > 1
+    ? `<button data-kind="__both" class="${KINDS.length>1?"on":""}">both</button>` : "");
+  seg.querySelectorAll("button").forEach(b => b.onclick = () => {
+    KINDS = b.dataset.kind === "__both" ? all.slice() : [b.dataset.kind];
+    KINDS.sort((a,z) => (a!==RUN.default) - (z!==RUN.default));
+    renderModel();
+    if (LAST) LAST();
+  });
+
+  // one card per estimator, with its held-out test numbers
+  $("#mcards").innerHTML = RUN.estimators.map(e => {
+    const m = e.metrics || {};
+    const on = KINDS.includes(e.kind);
+    return `<div class="mcard ${on?"on":""}">
+      <div class="hd">
+        <span class="swatch" style="background:${kindColor(e.kind)}"></span>
+        <strong>${e.label}</strong>
+        ${e.is_default ? '<span class="pill tag">default</span>' : ""}
+        <span class="spacer"></span>
+        <span class="note mono">${esc(e.size)}</span>
+      </div>
+      <div class="note">${esc(e.blurb)}</div>
+      <div class="mstats">
+        <div><b>${fmt(m.pr_auc)}</b>PR-AUC</div>
+        <div><b>${fmt(m.roc_auc)}</b>ROC-AUC</div>
+        <div><b>${pct(m.precision)}</b>precision</div>
+        <div><b>${pct(m.recall)}</b>recall</div>
+        <div><b>${fmt(e.threshold)}</b>threshold</div>
+      </div>
+      <div class="note">${m.n
+        ? `held out: ${num(m.n)} windows, ${num(m.n_pos)} of them positive
+           (${pct(m.base_rate)} base rate)`
+        : "no held-out metrics recorded for this run"}</div>
+    </div>`;
+  }).join("");
+
+  $("#modeldetails").innerHTML = modelDetails();
+
+  // input card copy, which is all window-length dependent
+  $("#droptitle").textContent = `Drop a telemetry file here`;
+  $("#dropnote").innerHTML =
+    `or click to choose &nbsp;·&nbsp; <span class="mono">.xlsx</span>,
+     <span class="mono">.csv</span> or <span class="mono">.parquet</span>
+     &nbsp;·&nbsp; one drive or a whole fleet`;
+  $("#padnote").innerHTML =
+    `— a drive that stopped reporting partway through holds fewer than ${w} days. Off it
+     is skipped; on it is left-padded to ${w} and scored anyway, and the row is marked
+     <span class="pill warn">partial</span>. In a historical file the drives that failed
+     are usually the short ones.`;
+  $("#inputrules").innerHTML =
+    `The file needs a <span class="mono">date</span> column, a
+     <span class="mono">serial_number</span> column, and at least <span class="mono">${w}
+     </span> days per drive. Missing SMART columns are filled with the training-set
+     median — the report below names exactly which ones were found. Gaps in the calendar
+     are forward-filled and flagged to the model through an
+     <span class="mono">observed</span> channel. Nothing is uploaded anywhere: the file is
+     parsed in this process, scored, and dropped.`;
+}
+
+function modelDetails() {
+  const t = RUN.tables || {};
+  const bits = [];
+
+  if (t.precision_at_k && t.precision_at_k.length) {
+    const rows = t.precision_at_k;
+    const cols = Object.keys(rows[0]).filter(c => c !== "K");
+    bits.push(`<details><summary>Ranking quality on the held-out fleet — precision@K</summary>
+      <p class="note" style="margin-top:0">Take the K highest-scoring drives and ask how
+      many really did fail. This is the number that decides whether a maintenance queue
+      is worth reading, and it is measured at the fleet's real failure rate.</p>
+      <table><thead><tr><th>K</th>${cols.map(c =>
+        `<th class="num">${esc(c)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map(r => `<tr><td class="mono">${r.K}</td>${cols.map(c =>
+        `<td class="num mono">${typeof r[c] === "number" && r[c] <= 1 && !Number.isInteger(r[c])
+          ? fmt(r[c],3) : num(r[c])}</td>`).join("")}</tr>`).join("")}</tbody></table>
+      </details>`);
+  }
+
+  if (t.importance && t.importance.length) {
+    const max = Math.max(...t.importance.map(r => r.gain));
+    bits.push(`<details><summary>What XGBoost leans on — share of total gain</summary>
+      <p class="note" style="margin-top:0">Two features carry half the model:
+      <span class="mono">smart_197</span> (pending sectors) differenced over 7 days, and
+      <span class="mono">smart_5</span> (reallocated sectors) differenced over 1 day. Not
+      the level of either counter — the <em>movement</em>.</p>
+      <div class="contrib">${t.importance.map(r => `
+        <span class="cname">${esc(r.feature)}</span>
+        <span class="mono note" style="text-align:right">${fmt(r.gain,4)}</span>
+        <span style="grid-column:1/3"><span class="cbar"><i style="left:0;
+          width:${(100*r.gain/max).toFixed(1)}%;background:var(--red)"></i></span></span>
+      `).join("")}</div></details>`);
+  }
+
+  if (t.channel_auc && t.channel_auc.length) {
+    bits.push(`<details><summary>The leakage audit — is any single column just the label?</summary>
+      <p class="note" style="margin-top:0">Every column is scored against
+      <span class="mono">failure</span> before it is allowed near a model. A rank AUC near
+      1.0 means the column <em>is</em> the outcome rather than evidence about it. The
+      strongest surviving SMART channel reaches
+      <strong>${fmt(RUN.max_channel_auc)}</strong> — signal, not an echo.
+      ${RUN.leakage_checks_passed
+        ? '<span class="pill ok">all checks passed</span>' : ""}</p>
+      <table><thead><tr><th>Channel</th><th class="num">AUC vs the window label</th>
+      </tr></thead><tbody>${t.channel_auc.map(r =>
+        `<tr><td class="mono">${esc(r.channel)}</td>
+         <td class="num mono">${fmt(r.auc_vs_window_label)}</td></tr>`).join("")}
+      </tbody></table></details>`);
+  }
+
+  if (RUN.blocklist && RUN.blocklist.length) {
+    bits.push(`<details><summary>Columns the model is forbidden to read
+      (${RUN.blocklist.length})</summary>
+      <p class="note" style="margin-top:0">These were measured to be proxies for the
+      outcome rather than evidence about it, so they were dropped before training and are
+      never read here — even when your file contains them. Example 3 below ships four of
+      them on purpose so you can check.</p>
+      <table><thead><tr><th style="width:290px">Blocked column</th><th>Why</th></tr>
+      </thead><tbody>${RUN.blocklist.map(b =>
+        `<tr><td class="mono">${esc(b.column)}</td>
+         <td class="note">${esc(b.why)}</td></tr>`).join("")}</tbody></table>
+      ${RUN.sparse_dropped.length ? `<p class="note">Also excluded, for coverage rather
+        than leakage — reported by too small a slice of the archive to trust:
+        <span class="mono">${RUN.sparse_dropped.join(", ")}</span>.</p>` : ""}
+      </details>`);
+  }
+
+  if (RUN.tree_baseline) {
+    const tb = RUN.tree_baseline;
+    bits.push(`<details><summary>Why boosting, and not one big tree</summary>
+      <p class="note" style="margin-top:0">A single decision tree grown until it could not
+      fit the training set any better reached depth ${num(tb.actual_depth)} with
+      ${num(tb.leaves)} leaves and ${fmt(tb.train_accuracy,5)} training accuracy — and
+      ${fmt(tb.test_balanced_acc,3)} balanced accuracy on held-out data. It memorised the
+      training set rather than learning anything transferable. That gap is the argument
+      for an ensemble of shallow trees.</p></details>`);
+  }
+
+  bits.push(`<details><summary>The ${RUN.attributes.length} attributes this run reads</summary>
+    <p class="note" style="margin-top:0">Each becomes ${1 + RUN.delta_lags.length} channels
+    — the raw value plus its change over ${RUN.delta_lags.join(" and ")} day(s) — giving
+    ${RUN.n_channels} in total, including the observed/imputed mask.</p>
+    <div class="row">${RUN.attributes.map(a =>
+      `<span class="chip mono" style="cursor:default">${esc(a)}</span>`).join("")}</div>
+    </details>`);
+
+  return bits.join("");
+}
+
+/* -------------------------------------------------------------- samples */
+async function loadSamples() {
+  const s = await (await fetch(`/api/samples?run=${RUN.key}`)).json();
+  const chip = x => `<span class="chip ${x.kind}" data-rel="${esc(x.rel)}"
+      data-label="${esc(x.label)}"
+      ${x.shows ? `title="${esc(x.shows)}"` : ""}>${esc(x.label)}
       <span class="note">· ${x.drives} drive${x.drives===1?"":"s"}${
         x.failures ? `, ${x.failures} failed` : ""}</span></span>`;
   const ex = s.samples.filter(x => x.kind === "example");
   const fam = s.samples.filter(x => x.kind !== "example");
-  if (ex.length) $("#examples").innerHTML =
-    `<span class="note">built to demo one behaviour each — hover for what:</span>`
-    + ex.map(chip).join("");
-  if (fam.length) $("#samples").innerHTML =
-    `<span class="note">or a real workbook from <span class="mono">data/Toshiba/</span>:</span>`
-    + fam.map(chip).join("");
-  document.querySelectorAll(".chip").forEach(c =>
-    c.onclick = () => runSample(c.dataset.rel, c.textContent.trim().split("·")[0].trim()));
+  $("#examples").innerHTML = ex.length
+    ? `<span class="note">built to demo one behaviour each — hover for what:</span>`
+      + ex.map(chip).join("") : "";
+  $("#samples").innerHTML = fam.length
+    ? `<span class="note">or a real workbook from
+       <span class="mono">data/Toshiba/</span>:</span>` + fam.map(chip).join("") : "";
+  $$(".chip[data-rel]").forEach(c =>
+    c.onclick = () => runSample(c.dataset.rel, c.dataset.label));
 
-  // ?sample=<family>/<file.xlsx>&pad=1 scores that example on load, so a particular
-  // run can be bookmarked or handed to someone else.
   const p = new URLSearchParams(location.search);
   if (p.get("pad") === "1") $("#pad").checked = true;
   if (p.get("sample")) runSample(p.get("sample"), p.get("sample"));
 }
 
+/* -------------------------------------------------------------- running */
 function busy(msg) {
   $("#status").innerHTML = `<div class="card"><span class="spin"></span>${msg}</div>`;
   $("#out").innerHTML = ""; $("#detail").classList.add("hidden");
 }
-function fail(msg) {
-  $("#status").innerHTML = `<div class="err">${msg}</div>`;
-}
+const fail = msg => { $("#status").innerHTML = `<div class="err">${esc(msg)}</div>`; };
 
 async function send(url, opts, label) {
-  busy(`Reading and scoring <strong>${label}</strong>… a large family workbook can take
-        20–30 seconds.`);
+  busy(`Reading and scoring <strong>${esc(label)}</strong>… a large family workbook can
+        take 20–30 seconds, nearly all of it spreadsheet parsing.`);
   try {
     const r = await fetch(url, opts);
     const d = await r.json();
@@ -191,119 +443,28 @@ async function send(url, opts, label) {
   } catch (e) { fail(String(e)); }
 }
 const padOn = () => $("#pad").checked;
-let LAST = null;                      // so the toggle can re-run the same input
 const runFile = f => {
   LAST = () => runFile(f);
-  const fd = new FormData(); fd.append("file", f); fd.append("pad", padOn() ? "1" : "0");
+  const fd = new FormData();
+  fd.append("file", f); fd.append("pad", padOn() ? "1" : "0");
+  fd.append("run", RUN.key); fd.append("models", KINDS.join(","));
   send("/api/predict", {method:"POST", body:fd}, f.name);
 };
 const runSample = (rel, label) => {
   LAST = () => runSample(rel, label);
   send("/api/predict-sample",
     {method:"POST", headers:{"Content-Type":"application/json"},
-     body:JSON.stringify({rel, pad: padOn()})}, label);
+     body:JSON.stringify({rel, pad:padOn(), run:RUN.key, models:KINDS})}, label);
 };
 
-function render(d) {
-  const g = d.diagnostics, s = d.summary;
-  const missing = g.attributes_missing;
-
-  const diag = `
-    <div class="card">
-      <div class="row" style="margin-bottom:12px">
-        <strong>${d.source}</strong>
-        <span class="note">parsed and scored in ${d.seconds}s</span>
-      </div>
-      <div class="kpis" style="margin-bottom:14px">
-        <div class="kpi"><div class="n">${g.drives_scored.toLocaleString()}</div>
-          <div class="l">drives scored</div></div>
-        <div class="kpi"><div class="n" style="color:var(--red)">${s.inspect.toLocaleString()}</div>
-          <div class="l">flagged <em>inspect</em></div></div>
-        <div class="kpi"><div class="n" style="color:var(--green)">${s.hold.toLocaleString()}</div>
-          <div class="l">flagged <em>hold</em></div></div>
-        <div class="kpi"><div class="n">${fmt(s.max_risk)}</div>
-          <div class="l">highest risk in file</div></div>
-        <div class="kpi"><div class="n">${g.rows.toLocaleString()}</div>
-          <div class="l">rows read</div></div>
-      </div>
-      <div class="note">
-        <div>window: <span class="mono">${g.date_min} → ${g.date_max}</span></div>
-        <div>SMART attributes found: <strong>${g.attributes_found.length}</strong>
-          of ${META.attributes.length}${missing.length
-            ? ` — <span class="pill warn">missing ${missing.length}</span>
-                <span class="mono">${missing.join(", ")}</span>
-                (filled with the training median, which weakens the prediction)`
-            : ` <span class="pill ok">complete</span>`}</div>
-        ${g.drives_padded ? `<div><span class="pill warn">padded
-            ${g.drives_padded.toLocaleString()}</span> drive(s) had fewer than
-            ${d.window_days} days and were left-padded — those scores are an
-            extrapolation, not a calibrated prediction</div>` : ""}
-        ${g.drives_skipped ? `<div><span class="pill warn">skipped
-            ${g.drives_skipped.toLocaleString()}</span> drive(s) with fewer than
-            ${d.min_days} days — e.g. ${g.skipped_examples
-              .map(x => `<span class="mono">${x.serial}</span> (${x.days}d)`).join(", ")}</div>` : ""}
-        ${g.has_failure_column ? `<div>the file carries a <span class="mono">failure</span>
-            column; it is shown for reference and was <strong>not</strong> given to the
-            model</div>` : ""}
-        ${g.notes.map(n => `<div>${n}</div>`).join("")}
-      </div>
-    </div>`;
-
-  const showOutcome = g.has_failure_column;
-  const table = `
-    <div class="card">
-      <div class="row" style="margin-bottom:10px">
-        <strong>Predictions</strong>
-        <span class="note">highest risk first · <em>inspect</em> means at or above the
-          tuned threshold ${fmt(d.threshold)}</span>
-        <span class="spacer"></span>
-        <button id="csv">download CSV</button>
-      </div>
-      <table><thead><tr>
-        <th style="width:48px">#</th><th>Serial</th><th>Drive model</th>
-        <th style="width:200px">Risk of failure</th><th style="width:96px">Call</th>
-        <th style="width:190px">Window scored</th>
-        ${showOutcome ? '<th style="width:110px">In file</th>' : ""}
-      </tr></thead><tbody>${d.rows.slice(0,500).map(r => `
-        <tr data-serial="${r.serial}">
-          <td class="note">${r.rank}</td>
-          <td class="mono">${r.serial}</td>
-          <td class="note">${r.drive_model}</td>
-          <td><div class="bar"><span class="mono" style="width:52px">${fmt(r.risk)}</span>
-            <span class="track"><span class="fill" style="width:${(r.risk*100).toFixed(1)}%;
-              background:${riskColor(r.risk)}"></span></span></div></td>
-          <td><span class="pill ${r.action==="inspect"?"act":"ok"}">${r.action}</span></td>
-          <td class="note">${r.window_start} → ${r.window_end}
-            ${r.n_padded_days
-              ? `<span class="pill warn">${r.days_available} of ${d.window_days} days</span>`
-              : ""}</td>
-          ${showOutcome ? `<td class="note">${r.recorded_failure
-              ? '<span class="pill act">failed</span>' : "—"}</td>` : ""}
-        </tr>`).join("")}</tbody></table>
-      ${d.rows.length>500 ? `<p class="note">showing the top 500 of
-        ${d.rows.length.toLocaleString()} — use the CSV for the rest</p>` : ""}
-      <p class="note" style="margin-bottom:0">click any row to see the
-        ${d.window_days} days behind its score</p>
-    </div>`;
-
-  $("#out").innerHTML = diag + table;
-  document.querySelectorAll("#out tbody tr").forEach(tr =>
-    tr.onclick = () => showDrive(tr.dataset.serial));
-  $("#csv").onclick = () => downloadCsv(d);
+/* --------------------------------------------------------------- charts */
+function riskBar(v, thr, colour) {
+  return `<span class="bar"><span class="fill" style="width:${(100*v).toFixed(1)}%;
+    background:${colour}"></span><span class="thr"
+    style="left:${(100*thr).toFixed(1)}%"></span></span>`;
 }
 
-function downloadCsv(d) {
-  const cols = ["rank","serial","drive_model","risk","action","window_start","window_end",
-                "n_real_days","n_filled_days","recorded_failure"];
-  const csv = [cols.join(",")].concat(d.rows.map(r =>
-    cols.map(c => `"${String(r[c]).replace(/"/g,'""')}"`).join(","))).join("\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
-  a.download = d.source.replace(/\.[^.]+$/,"") + "_predictions.csv";
-  document.body.appendChild(a); a.click(); a.remove();
-}
-
-function sparkline(values, w=195, h=38) {
+function sparkline(values, w=193, h=36) {
   const v = values.filter(x => x!=null);
   if (!v.length) return `<svg width="${w}" height="${h}"></svg>`;
   const lo=Math.min(...v), hi=Math.max(...v), span=(hi-lo)||1;
@@ -311,49 +472,276 @@ function sparkline(values, w=195, h=38) {
     `${((i/Math.max(values.length-1,1))*(w-2)+1).toFixed(1)},${(h-2-((x-lo)/span)*(h-5)).toFixed(1)}`
   ).filter(Boolean).join(" ");
   return `<svg width="${w}" height="${h}" style="display:block"><polyline points="${pts}"
-    fill="none" stroke="${hi===lo?'#b9c0c9':'var(--blue)'}" stroke-width="1.6"
-    stroke-linejoin="round"/></svg>`;
+    fill="none" stroke="${hi===lo?'var(--grey)':'var(--blue)'}" stroke-width="1.6"
+    stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
+function trajectoryChart(traj, kinds, thresholds, w=720, h=150) {
+  const dates = traj.dates, n = dates.length;
+  if (n < 2) return `<p class="note">only one window available — no trajectory to draw.</p>`;
+  const pad = {l:38, r:10, t:10, b:22};
+  const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
+  const X = i => pad.l + (i/(n-1))*iw;
+  const Y = v => pad.t + (1 - Math.max(0, Math.min(1, v)))*ih;
+  const grid = [0, .25, .5, .75, 1].map(v =>
+    `<line x1="${pad.l}" x2="${w-pad.r}" y1="${Y(v)}" y2="${Y(v)}"
+       stroke="var(--line)" stroke-width="1"/>
+     <text x="${pad.l-6}" y="${Y(v)+3.5}" text-anchor="end" font-size="10"
+       fill="var(--muted)">${v.toFixed(2)}</text>`).join("");
+  const lines = kinds.map(k => {
+    const pts = traj[k].map((v,i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+    return `<polyline points="${pts}" fill="none" stroke="${kindColor(k)}"
+      stroke-width="2" stroke-linejoin="round"/>
+      <line x1="${pad.l}" x2="${w-pad.r}" y1="${Y(thresholds[k])}" y2="${Y(thresholds[k])}"
+        stroke="${kindColor(k)}" stroke-width="1" stroke-dasharray="3 3" opacity=".65"/>
+      <circle cx="${X(n-1)}" cy="${Y(traj[k][n-1])}" r="3.2" fill="${kindColor(k)}"/>`;
+  }).join("");
+  const ticks = [0, Math.floor((n-1)/2), n-1].map(i =>
+    `<text x="${X(i)}" y="${h-6}" text-anchor="${i===0?"start":i===n-1?"end":"middle"}"
+       font-size="10" fill="var(--muted)">${dates[i]}</text>`).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}"
+    style="display:block;max-width:100%">${grid}${lines}${ticks}</svg>`;
+}
+
+function contribChart(items) {
+  const max = Math.max(...items.map(x => Math.abs(x.contribution))) || 1;
+  return `<div class="contrib">${items.map(x => {
+    const frac = Math.abs(x.contribution)/max*49;
+    const left = x.contribution >= 0 ? 50 : 50 - frac;
+    return `<span class="cname">${esc(x.feature)}</span>
+      <span class="mono note" style="text-align:right">${x.contribution>=0?"+":""}${
+        fmt(x.contribution,2)}</span>
+      <span style="grid-column:1/3"><span class="cbar">
+        <span class="axis" style="left:50%"></span>
+        <i style="left:${left}%;width:${frac}%;background:${
+          x.contribution>=0?"var(--red)":"var(--green)"}"></i></span></span>`;
+  }).join("")}</div>`;
+}
+
+/* --------------------------------------------------------------- render */
+function render(d) {
+  const g = d.diagnostics, missing = g.attributes_missing, kinds = d.kinds;
+  const p = d.primary, s = d.summary[p];
+
+  const speed = kinds.map(k =>
+    `${est(k).label} ${d.seconds_by_model[k]}s`).join(" · ");
+
+  const diag = `
+    <div class="card">
+      <div class="row" style="margin-bottom:12px">
+        <strong>${esc(d.source)}</strong>
+        <span class="note">parsed and scored in ${d.seconds}s · inference ${speed}</span>
+        <span class="spacer"></span>
+        <span class="note mono">${esc(RUN.label)} · ${kinds.map(k =>
+          est(k).label).join(" + ")}</span>
+      </div>
+      <div class="kpis" style="margin-bottom:14px">
+        <div class="kpi"><div class="n">${num(g.drives_scored)}</div>
+          <div class="l">drives scored</div></div>
+        <div class="kpi"><div class="n" style="color:var(--red)">${num(s.inspect)}</div>
+          <div class="l">flagged <em>inspect</em> by ${est(p).label}</div></div>
+        <div class="kpi"><div class="n" style="color:var(--green)">${num(s.hold)}</div>
+          <div class="l">flagged <em>hold</em></div></div>
+        <div class="kpi"><div class="n">${fmt(s.max_risk)}</div>
+          <div class="l">highest risk in file</div></div>
+        <div class="kpi"><div class="n">${num(g.rows)}</div>
+          <div class="l">rows read</div></div>
+        ${d.agreement ? `<div class="kpi"><div class="n">${fmt(d.agreement.spearman,2)}</div>
+          <div class="l">rank correlation, ${est(kinds[0]).label} vs ${
+            est(kinds[1]).label}</div></div>` : ""}
+      </div>
+      <div class="note">
+        <div>telemetry spans <span class="mono">${g.date_min} → ${g.date_max}</span>;
+          each drive is scored on its own most recent ${d.window_days} days</div>
+        <div>SMART attributes found: <strong>${g.attributes_found.length}</strong>
+          of ${RUN.attributes.length}${missing.length
+            ? ` — <span class="pill warn">missing ${missing.length}</span>
+                <span class="mono">${missing.join(", ")}</span>
+                (filled with the training median, which weakens the prediction)`
+            : ` <span class="pill ok">complete</span>`}</div>
+        ${g.drives_padded ? `<div><span class="pill warn">padded
+            ${num(g.drives_padded)}</span> drive(s) held fewer than ${d.window_days} days
+            and were left-padded — those scores are an extrapolation, not a calibrated
+            prediction</div>` : ""}
+        ${g.drives_skipped ? `<div><span class="pill warn">skipped
+            ${num(g.drives_skipped)}</span> drive(s) with fewer than ${d.min_days} days —
+            e.g. ${g.skipped_examples.map(x =>
+              `<span class="mono">${esc(x.serial)}</span> (${x.days}d)`).join(", ")}</div>`
+          : ""}
+        ${g.has_failure_column ? `<div>the file carries a
+            <span class="mono">failure</span> column; it is shown for reference and was
+            <strong>not</strong> given to the model</div>` : ""}
+        ${d.agreement ? `<div>both models call <strong>${d.agreement.both}</strong> drive(s)
+            <em>inspect</em>; ${est(kinds[0]).label} alone flags ${d.agreement.only_first},
+            ${est(kinds[1]).label} alone ${d.agreement.only_second}</div>` : ""}
+        ${g.notes.map(n => `<div>${esc(n)}</div>`).join("")}
+      </div>
+    </div>`;
+
+  const quality = d.quality ? qualityCard(d) : "";
+
+  const showOutcome = g.has_failure_column;
+  const head = kinds.map(k =>
+    `<th style="width:${kinds.length>1?165:210}px">
+       <span class="swatch" style="background:${kindColor(k)}"></span>${est(k).label} risk
+     </th>`).join("");
+  const table = `
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">
+        <strong>Predictions</strong>
+        <span class="note">ranked by ${est(p).label} · <em>inspect</em> means at or above
+          the tuned threshold ${fmt(d.thresholds[p])}, marked on each bar</span>
+        <span class="spacer"></span>
+        <button id="csv">download CSV</button>
+      </div>
+      <table><thead><tr>
+        <th style="width:44px">#</th><th>Serial</th><th>Drive model</th>
+        ${head}<th style="width:86px">Call</th>
+        <th style="width:180px">Window scored</th>
+        ${showOutcome ? '<th style="width:96px">In file</th>' : ""}
+      </tr></thead><tbody>${d.rows.map(r => `
+        <tr class="click" data-serial="${esc(r.serial)}">
+          <td class="note">${r.rank}</td>
+          <td class="mono">${esc(r.serial)}</td>
+          <td class="note">${esc(r.drive_model)}</td>
+          ${kinds.map(k => `<td><div class="row" style="gap:7px;flex-wrap:nowrap">
+            <span class="mono" style="width:46px">${fmt(r.scores[k])}</span>
+            ${riskBar(r.scores[k], d.thresholds[k], kindColor(k))}</div></td>`).join("")}
+          <td><span class="pill ${r.action==="inspect"?"act":"ok"}">${r.action}</span></td>
+          <td class="note">${r.window_start} → ${r.window_end}
+            ${r.n_padded_days
+              ? `<span class="pill warn">${r.days_available} of ${d.window_days} d</span>`
+              : ""}</td>
+          ${showOutcome ? `<td class="note">${r.recorded_failure
+              ? '<span class="pill act">failed</span>' : "—"}</td>` : ""}
+        </tr>`).join("")}</tbody></table>
+      ${d.n_rows_total > d.rows.length ? `<p class="note">showing the top
+        ${d.rows.length} of ${num(d.n_rows_total)} — the CSV has the rest</p>` : ""}
+      <p class="note" style="margin-bottom:0">click any row for the
+        ${d.window_days} days behind its score, how the score moved as the window slid
+        forward, and which features drove it</p>
+    </div>`;
+
+  $("#out").innerHTML = diag + quality + table;
+  $$("#out tbody tr.click").forEach(tr =>
+    tr.onclick = () => showDrive(tr.dataset.serial));
+  $("#csv").onclick = () => downloadCsv(d);
+}
+
+function qualityCard(d) {
+  const kinds = d.kinds.filter(k => d.quality[k]);
+  if (!kinds.length) return "";
+  const q0 = d.quality[kinds[0]];
+  return `<div class="card">
+    <h2>How the ranking did against this file's own ground truth</h2>
+    <p class="note" style="margin-top:0">This file records
+      <strong>${q0.n_failed}</strong> of its ${q0.n_drives} drives as failed. A handful of
+      drives is a demonstration, not an evaluation — the held-out numbers on the model
+      card above are the ones that mean something. But it is the obvious thing to check on
+      a historical file, so: take the K highest-scoring drives and count the real failures
+      among them.</p>
+    <table><thead><tr><th>Model</th>${q0.at_k.map(a =>
+      `<th class="num">top ${a.k}</th>`).join("")}
+      <th class="num">recall @ ${q0.n_failed}</th>
+      <th class="num">mean rank of the failures</th></tr></thead>
+    <tbody>${kinds.map(k => {
+      const q = d.quality[k];
+      return `<tr><td><span class="swatch" style="background:${kindColor(k)}"></span>
+        ${est(k).label}</td>
+        ${q.at_k.map(a => `<td class="num mono">${a.hits}/${a.k}
+          <span class="note">(${pct(a.precision)})</span></td>`).join("")}
+        <td class="num mono">${pct(q.recall_at_n_pos)}</td>
+        <td class="num mono">${fmt(q.mean_rank_of_failures,1)}</td></tr>`;
+    }).join("")}</tbody></table></div>`;
+}
+
+function downloadCsv(d) {
+  const cols = ["rank","serial","drive_model","action","window_start","window_end",
+                "n_real_days","n_filled_days","n_padded_days","days_available",
+                "recorded_failure"];
+  const head = ["rank","serial","drive_model"]
+    .concat(d.kinds.map(k => `risk_${k}`))
+    .concat(cols.slice(3));
+  const line = r => ["rank","serial","drive_model"].map(c => r[c])
+    .concat(d.kinds.map(k => r.scores[k].toFixed(6)))
+    .concat(cols.slice(3).map(c => r[c]))
+    .map(v => `"${String(v).replace(/"/g,'""')}"`).join(",");
+  const csv = [head.join(",")].concat(d.rows.map(line)).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
+  a.download = d.source.replace(/\.[^.]+$/,"") + "_predictions.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* ---------------------------------------------------------- drive detail */
 async function showDrive(serial) {
-  SEL = serial;
-  document.querySelectorAll("#out tbody tr").forEach(tr =>
+  $$("#out tbody tr").forEach(tr =>
     tr.classList.toggle("sel", tr.dataset.serial === serial));
   const box = $("#detail"); box.classList.remove("hidden");
-  box.innerHTML = `<span class="spin"></span>loading ${serial}…`;
+  box.innerHTML = `<span class="spin"></span>scoring the trailing windows for
+    ${esc(serial)}…`;
 
   const d = await (await fetch(
     `/api/upload/${RESULT.token}/drive/${encodeURIComponent(serial)}`)).json();
-  if (d.error) { box.innerHTML = `<p class="note">${d.error}</p>`; return; }
+  if (d.error) { box.innerHTML = `<p class="note">${esc(d.error)}</p>`; return; }
+
+  const kinds = RESULT.kinds;
+  const scores = kinds.map(k =>
+    `<span style="font-size:19px;font-weight:650;color:${kindColor(k)}">${
+      fmt(d.scores[k])}</span>
+     <span class="note">${est(k).label}</span>`).join('<span style="width:14px"></span>');
+
+  const traj = d.trajectory && d.trajectory.dates.length > 1 ? `
+    <h2 style="margin-top:16px">Risk as the window slid forward</h2>
+    <p class="note" style="margin-top:-6px">The same model, re-scored with the
+      ${RESULT.window_days}-day window ending one day earlier each step, over the last
+      ${d.trajectory.dates.length} days. Dashed line is the decision threshold. A drive
+      climbing across it is deteriorating; one sitting above it has been ill for a while.</p>
+    ${trajectoryChart(d.trajectory, kinds, RESULT.thresholds)}` : "";
+
+  const expl = Object.keys(d.explanations || {}).map(k => `
+    <h2 style="margin-top:16px">Why ${est(k).label} scored it ${fmt(d.scores[k])}</h2>
+    <p class="note" style="margin-top:-6px">Exact SHAP contributions in log-odds for this
+      one window: red pushed the score up, green pulled it down, and together with the
+      model's base rate they sum to the logit of the score above. Feature names read
+      <span class="mono">&lt;channel&gt;__&lt;aggregate&gt;</span> — so
+      <span class="mono">smart_5_raw_d1__last</span> is the one-day change in reallocated
+      sectors on the window's final day.</p>
+    ${contribChart(d.explanations[k])}`).join("");
 
   const cards = d.attributes.map(a => {
     const cur = d.latest[a];
-    return `<div class="spark"><div class="name">${a}</div>
+    return `<div class="spark"><div class="name">${esc(a)}</div>
       <div class="val">${cur==null ? "—" : cur.toLocaleString()}</div>
       <div class="med">last reading in the window</div>
       ${sparkline(d.series[a])}</div>`;
   }).join("");
 
   box.innerHTML = `
-    <div class="row" style="margin-bottom:4px">
-      <strong class="mono" style="font-size:16px">${d.serial}</strong>
+    <div class="row" style="margin-bottom:2px">
+      <strong class="mono" style="font-size:16px">${esc(d.serial)}</strong>
       <span class="pill ${d.action==="inspect"?"act":"ok"}">${d.action}</span>
-      <span class="note">rank ${d.rank} · ${d.drive_model}</span>
-      <span class="spacer"></span>
-      <span style="font-size:20px;font-weight:650;color:${riskColor(d.risk)}">${fmt(d.risk)}</span>
+      <span class="note">rank ${d.rank} · ${esc(d.drive_model)}</span>
+      <span class="spacer"></span>${scores}
     </div>
     <p class="note" style="margin-top:0">
-      scored from ${d.window_start} → ${d.window_end}
+      scored on ${d.window_start} → ${d.window_end}
       (${d.n_real_days} genuine readings${d.n_filled_days
-        ? `, ${d.n_filled_days} forward-filled` : ""})
-      ${d.recorded_failure ? "· the file records this drive as <strong>failed</strong>" : ""}
+        ? `, ${d.n_filled_days} forward-filled` : ""}${d.n_padded_days
+        ? `, ${d.n_padded_days} padded` : ""})
+      ${d.recorded_failure
+        ? "· the file records this drive as <strong>failed</strong>" : ""}
     </p>
-    <div class="grid">${cards}</div>
-    <p class="note">Raw reported values across those ${d.dates.length} days.
-      A flat grey line means the counter never moved.</p>`;
+    ${traj}${expl}
+    <h2 style="margin-top:16px">The ${d.dates.length} days behind the score</h2>
+    <p class="note" style="margin-top:-6px">Raw reported values, in the units the file
+      gave them — before the log1p, the differencing and the scaler. A flat grey line
+      means the counter never moved.</p>
+    <div class="grid">${cards}</div>`;
   box.scrollIntoView({behavior:"smooth", block:"nearest"});
 }
 
+/* ----------------------------------------------------------------- wire */
 const drop = $("#drop"), input = $("#file");
 drop.onclick = () => input.click();
 input.onchange = () => input.files[0] && runFile(input.files[0]);

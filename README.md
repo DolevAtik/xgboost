@@ -77,49 +77,92 @@ rows have been thinned has neither.
 python webapp/app.py        # http://127.0.0.1:5000
 ```
 
-Drop in an `.xlsx` (or `.csv`) holding 90 days of SMART telemetry — one drive or a whole
-family — and every drive in it is scored.
+Drop in an `.xlsx`, `.csv` or `.parquet` of daily SMART telemetry — one drive or a whole
+fleet — and every drive in it is scored on its own most recent window.
 
-The page offers ready-made input as one-click chips: six purpose-built files from
-`data/examples/` (see that folder's README, or `scripts/make_example_workbooks.py` to
-rebuild them), and one real workbook per family from `data/Toshiba/`, which is already
-exactly this shape.
+### What it serves
 
-| example | demonstrates | result |
-|---|---|---|
-| `01_single_drive_healthy` | one clean 90-day window | risk 0.002, `hold` |
-| `02_single_drive_failing` | a drive's final 90 days | risk 0.997, `inspect` |
-| `03_small_fleet_mixed` | ranking, plus four blocked columns carried along | 4 of 6 failures in the top 6 |
-| `04_partial_windows` | drives cut short mid-window | 2 scored by default, 8 with the checkbox |
-| `05_missing_smart_columns` | only 5 of the 16 attributes | scores and warns; top risk 0.997 → 0.752 |
-| `06_renamed_columns` | headers `time`/`serial`, no `failure` | aliases mapped; matches example 03 |
+The default run is **`backblaze_2022x_w30`**: a 30-day window over the Backblaze fleet
+from Q1 2022 on, predicting failure within 30 days of the window's last day. It carries
+**two estimators trained on the identical windows**, and the app can run either or both:
 
-It loads `models/backblaze_window90_cnn.pth` and its preprocessing config, lays the
-uploaded rows on a dense daily calendar, replays the **saved** scaler — not a freshly
-fitted one, which would be train/serve skew — and scores each drive's most recent
-90-day window.
+| estimator | test PR-AUC | ROC-AUC | precision | recall | drive precision @100 |
+|---|---|---|---|---|---|
+| **XGBoost** (default) | **0.388** | **0.919** | 49.5% | 39.7% | **99 / 100** |
+| CNN | 0.323 | 0.905 | 43.1% | 36.0% | 92 / 100 |
 
-- **Results** — every drive ranked by `P(fails within 30 days)`, with an
-  `inspect` / `hold` call against the threshold tuned on validation, and a CSV export.
-- **Input report** — rows read, drives found, date range, which of the 16 SMART
+Measured on 3.09M held-out tiling windows at the fleet's real base rate of 0.24% — not on
+a balanced cohort, where both numbers would be flattering.
+
+Every run found in `models/` is offered in a dropdown, including the 90-day cohort models
+and the full-archive run, so you can score the same file with each and compare. Two config
+dialects are read transparently (`webapp/scoring.py`), so an older artifact set still
+loads.
+
+### What the page does
+
+- **Model card** — both estimators side by side with their held-out metrics, the
+  precision@K ladder, XGBoost's gain ranking, the leakage audit's per-channel AUCs, and
+  the depth-123 decision tree that memorised its training set, as the argument for an
+  ensemble.
+- **Results** — every drive ranked by `P(fails within 30 days)`, with the decision
+  threshold drawn *on each risk bar* (XGBoost's is 0.217, so "low-looking" scores can
+  still be `inspect`), an `inspect`/`hold` call, and a CSV export carrying both models'
+  scores.
+- **Head to head** — with both selected, the table shows both scores, and the header
+  reports how many drives each flags alone and the rank correlation between them.
+- **Retrospective check** — when the file carries a `failure` column, a precision@K panel
+  scores the ranking against it. The column is never given to the model.
+- **Input report** — rows read, drives found, date range, which of the 15 SMART
   attributes were present, and which drives were skipped and why.
-- **Drive detail** — click any row for the 90-day sparkline of each attribute.
+- **Drive detail** — click any row for three things the table cannot show: the raw
+  telemetry behind the score, the **risk trajectory** (the same model re-scored with the
+  window slid back a day at a time, over 45 days, against the threshold — a drive
+  climbing across it is deteriorating rather than merely unwell), and, for XGBoost, the
+  **exact signed SHAP contribution** of each feature to that window's log-odds.
 - **Provenance** — an expandable panel listing every blocked column and why, so it is
   visible on screen that the score never read them, even if your file contains them.
 
-**Partial windows.** A drive that stopped reporting partway through a window holds fewer
-than 90 days. By default it is skipped, because 90 continuous days is what the model was
-trained and calibrated on. That default hides exactly the drives a *historical* file is
-about — the ones that failed are the short ones — so there is a checkbox to left-pad them
-to 90 and score them anyway, with every such row marked. On
-`MG11ACA24TE/2025-09-22_2025-12-20.xlsx` that is the difference between 3 drives scored
-and 14, and with it on the model ranks all four recorded failures in the top six.
+The app lays the uploaded rows on a dense daily calendar, replays the **saved** scaler —
+not a freshly fitted one, which would be train/serve skew — and scores each drive's most
+recent window. Nothing is written to disk and nothing leaves the machine.
 
-Startup is ~1 second (only the model is loaded). A single-drive workbook scores in well
-under a second; a 115k-row family workbook takes ~20s, nearly all of it Excel parsing —
-`python-calamine` is used for that, and is about 6× faster than openpyxl here. No network
-calls and no external assets, and uploads are parsed in memory and never written to disk.
-Templates auto-reload, so editing `webapp/templates/index.html` needs only a refresh.
+### Ready-made input
+
+The page offers one-click chips: six purpose-built files from `data/examples/` (see that
+folder's README) and one real workbook per family from `data/Toshiba/`.
+
+| example | demonstrates | result |
+|---|---|---|
+| `01_single_drive_healthy` | one clean 30-day window | risk 0.000, `hold` |
+| `02_single_drive_failing` | a drive's final 30 days | risk 0.995, `inspect` |
+| `03_small_fleet_mixed` | ranking, plus four blocked columns carried along | 4 of 6 failures in the top 4, all 6 in the top 9 |
+| `04_partial_windows` | drives cut short mid-window | 2 scored by default, 8 with the checkbox |
+| `05_missing_smart_columns` | only 5 of the 15 attributes | scores and warns; top risk 0.995 → 0.953 |
+| `06_renamed_columns` | headers `time`/`serial`, no `failure` | aliases mapped; matches example 03 to six decimals |
+
+`scripts/make_example_workbooks.py` rebuilds them. It reads the run the app serves rather
+than a hard-coded attribute list, so the files track the model: regenerate them after
+training a new one, or the app will median-fill inputs the workbooks never carried.
+
+**Partial windows.** A drive that stopped reporting partway through holds fewer than 30
+days. By default it is skipped, because a continuous window is what the model was trained
+and calibrated on. That default hides exactly the drives a *historical* file is about —
+the ones that failed are the short ones — so there is a checkbox to left-pad them and
+score them anyway, down to a floor of 10 days, with every such row marked. On
+`MG11ACA24TE/2025-09-22_2025-12-20.xlsx` that is the difference between 14 drives scored
+and 17 — and all three of the drives it adds turn out to have failed, taking the file
+from 4 recorded failures visible to 7. With it on, XGBoost puts five of those seven in
+the top five.
+
+Startup is under a second — every run in `models/` is loaded, but no data. A single-drive
+workbook scores in well under a second; a 115k-row family workbook takes ~20s, nearly all
+of it Excel parsing, for which `python-calamine` is about 6× faster than openpyxl here.
+No network calls and no external assets, and uploads are parsed in memory and never
+written to disk. Templates auto-reload, so editing `webapp/templates/index.html` needs
+only a refresh.
+
+Set `RUN=<prefix>` to change which run the app opens on, and `HOST` / `PORT` to move it.
 
 `TOSHIBA_PIPELINE.md` is the detailed write-up of the Toshiba side — feature selection,
 the 90-day window, and the class-imbalance bug that cost the most accuracy.
@@ -147,6 +190,7 @@ the 90-day window, and the class-imbalance bug that cost the most accuracy.
 │   └── figures/                           the plots the analysis notebook saves
 ├── webapp/                              the local prediction app
 │   ├── app.py                             Flask server: upload -> parse -> score
+│   ├── scoring.py                         artifact discovery, contracts, estimators
 │   └── templates/index.html               the whole UI, one file, no external assets
 └── scripts/
     ├── build_backblaze_archive.py         fetches the whole archive -> parquet shards
@@ -197,9 +241,11 @@ python -m jupyter nbconvert --to notebook --execute --inplace Dataset_backblaze_
 python scripts/run_full_analysis.py --quick --epochs 3    # smoke test, ~3 min
 python scripts/run_full_analysis.py                       # the real run, ~35 min on CPU
 
-# the local prediction app: upload a 90-day workbook, get scores (needs models/)
-python scripts/make_example_workbooks.py   # rebuild data/examples/ (optional)
-python webapp/app.py        # then open http://127.0.0.1:5000 and drop a workbook in
+# the local prediction app: upload a workbook, get scores (needs models/)
+python scripts/make_example_workbooks.py   # rebuild data/examples/ for the current run
+python webapp/app.py                       # http://127.0.0.1:5000, then drop a file in
+RUN=backblaze_window90 python webapp/app.py   # open on a different run
+PORT=8080 python webapp/app.py                # move it
 
 # run one end to end, writing the outputs back into the notebook
 python -m jupyter nbconvert --to notebook --execute --inplace Dataset_Toshiba_Window90.ipynb
@@ -212,8 +258,9 @@ python scripts/backblaze_window_pipeline.py --quarters Q1_2023 Q2_2023 --arch cn
 ```
 
 Requires `pandas`, `numpy`, `pyarrow`, `torch`, `scikit-learn`, `tqdm`, `matplotlib`,
-plus `xgboost` and `python-calamine` for the notebooks, the parquet build and the app, and
-`nbconvert` + `ipykernel` to execute a notebook from the command line.
+plus `xgboost` and `python-calamine` for the notebooks, the parquet build and the app,
+`openpyxl` to *write* the example workbooks, and `nbconvert` + `ipykernel` to execute a
+notebook from the command line.
 
 ### Keeping the Backblaze downloads out of OneDrive
 

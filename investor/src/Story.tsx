@@ -1,16 +1,19 @@
 import { lazy, Suspense, type ReactNode } from "react";
+import { ContactDialog } from "./components/ContactDialog";
 import { Footer, Nav } from "./components/Nav";
 import { Loading } from "./components/States";
+import { DemoTeaser } from "./components/DemoTeaser";
 import { Hero } from "./sections/Hero";
 import { ProblemComparison } from "./sections/ProblemComparison";
 
 // Everything below the fold is split into its own chunk, fetched in parallel after the
 // hero has painted. The 3D scenes inside are additionally mounted only when visible.
-const Signal = lazy(() => import("./sections/Signal"));
 const Intelligence = lazy(() => import("./sections/Intelligence"));
 const PerformanceMetrics = lazy(() => import("./sections/PerformanceMetrics"));
 const Product = lazy(() => import("./sections/Product"));
+const ValueCalculator = lazy(() => import("./sections/ValueCalculator"));
 const ClosingScene = lazy(() => import("./sections/ClosingScene"));
+const Close = lazy(() => import("./sections/ClosingScene").then((m) => ({ default: m.Close })));
 
 /** A code-split chapter. The placeholder keeps the anchor id so links work while it loads. */
 function Deferred({ id, children }: { id: string; children: ReactNode }) {
@@ -32,23 +35,28 @@ export function Story() {
       <main>
         <Hero />
         <ProblemComparison />
-        <Deferred id="signal">
-          <Signal />
-        </Deferred>
         <Deferred id="intelligence">
           <Intelligence />
         </Deferred>
         <Deferred id="breakthrough">
           <PerformanceMetrics />
         </Deferred>
-        <Deferred id="product">
-          <Product />
+        <DemoTeaser />
+        <Deferred id="value">
+          <ValueCalculator />
         </Deferred>
         <Deferred id="vision">
           <ClosingScene />
         </Deferred>
+        <Deferred id="product">
+          <Product />
+        </Deferred>
+        <Suspense fallback={null}>
+          <Close />
+        </Suspense>
       </main>
       <Footer />
+      <ContactDialog />
     </div>
   );
 }

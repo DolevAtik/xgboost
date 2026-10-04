@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { api } from "../lib/api";
+import { openContact } from "../lib/contact";
 import { useApi } from "../lib/useApi";
 
 export const NAV_LINKS = [
   { id: "problem", label: "The Problem" },
-  { id: "signal", label: "The Data" },
   { id: "intelligence", label: "Technology" },
   { id: "breakthrough", label: "Results" },
-  { id: "product", label: "Try It" },
+  { id: "value", label: "Value" },
   { id: "vision", label: "Vision" },
   { id: "team", label: "Team" },
+  { id: "product", label: "Try it live" },
 ];
 
 function Logo() {
@@ -82,30 +83,47 @@ export function Nav() {
           <ul className="flex items-center gap-7">
             {NAV_LINKS.map((l) => (
               <li key={l.id}>
-                <a
-                  href={`#${l.id}`}
-                  aria-current={active === l.id ? "true" : undefined}
-                  className={`relative py-5 text-sm transition-colors ${active === l.id ? "text-ink" : "text-muted hover:text-ink"}`}
-                >
-                  {l.label}
-                  {active === l.id && <span className="absolute inset-x-0 -bottom-px h-px bg-signal" />}
-                </a>
+                {l.id === "product" ? (
+                  <a
+                    href="#product"
+                    aria-current={active === l.id ? "true" : undefined}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                      active === l.id ? "bg-signal text-void" : "bg-signal/15 text-signal hover:bg-signal/25"
+                    }`}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+                    {l.label}
+                  </a>
+                ) : (
+                  <a
+                    href={`#${l.id}`}
+                    aria-current={active === l.id ? "true" : undefined}
+                    className={`relative py-5 text-sm transition-colors ${active === l.id ? "text-ink" : "text-muted hover:text-ink"}`}
+                  >
+                    {l.label}
+                    {active === l.id && <span className="absolute inset-x-0 -bottom-px h-px bg-signal" />}
+                  </a>
+                )}
               </li>
             ))}
           </ul>
         </nav>
 
         <div className="flex items-center gap-3">
-          <span
-            className="hidden items-center gap-2 text-xs text-muted xl:flex"
-            title={health.data?.engine.error ?? health.data?.engine.url ?? ""}
+          {/* Only worth a visitor's attention when something is wrong. */}
+          {!health.loading && !ok && (
+            <span className="hidden items-center gap-2 text-xs text-risk xl:flex" title={health.data?.engine.error ?? ""}>
+              <span className="h-1.5 w-1.5 rounded-full bg-risk" />
+              {status}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={openContact}
+            className="hidden items-center gap-2 rounded-full border border-signal/50 px-4 py-2 text-sm transition hover:border-signal hover:bg-signal/10 sm:inline-flex"
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${health.loading ? "bg-faint" : ok ? "bg-ok" : "bg-risk"}`} />
-            {status}
-          </span>
-          <a href="#product" className="hidden items-center gap-2 rounded-full border border-signal/50 px-4 py-2 text-sm transition hover:border-signal hover:bg-signal/10 sm:inline-flex">
-            Try the demo <ArrowRight size={14} aria-hidden />
-          </a>
+            Get in touch <ArrowRight size={14} aria-hidden />
+          </button>
           <button
             type="button"
             className="rounded-lg p-2 text-soft hover:text-ink lg:hidden"
@@ -128,6 +146,18 @@ export function Nav() {
                 </a>
               </li>
             ))}
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  openContact();
+                }}
+                className="mt-1 w-full rounded-lg border border-signal/40 px-3 py-2.5 text-left text-signal hover:bg-signal/10"
+              >
+                Get in touch
+              </button>
+            </li>
           </ul>
         </nav>
       )}
@@ -148,9 +178,6 @@ export function Footer() {
           saved models in <span className="font-mono">models/</span>, served by the local engine. Training data: Backblaze public drive-stats archives,
           Q1 2022 – Q2 2026. Runs entirely on this machine.
         </p>
-        <a href="#/lab" className="font-mono hover:text-soft">
-          artifact lab →
-        </a>
       </div>
     </footer>
   );

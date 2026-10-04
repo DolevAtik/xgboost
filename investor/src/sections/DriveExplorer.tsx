@@ -154,8 +154,15 @@ function SamplePicker({
   onPick: (d: DemoDataset) => void;
 }) {
   const { data, error, loading, reload } = demos;
-  const quick = data?.filter((d) => d.group === "demo") ?? [];
-  const more = data?.filter((d) => d.group !== "demo") ?? [];
+  // Three picks cover the story: a fleet to rank, one drive that failed, and a real
+  // 90-day export with a long enough history for risk trajectories.
+  const quickIds = [
+    "demo:03_fleet_60_drives.xlsx",
+    "demo:02_failing_drive.csv",
+    data?.find((d) => d.group === "export" && d.drives >= 20)?.id ?? data?.find((d) => d.group === "export")?.id,
+  ];
+  const quick = quickIds.map((id) => data?.find((d) => d.id === id)).filter((d): d is DemoDataset => !!d);
+  const more = data?.filter((d) => !quick.includes(d)) ?? [];
   const moreSelected = more.find((d) => d.id === selected)?.id ?? "";
 
   return (
@@ -165,7 +172,7 @@ function SamplePicker({
       <p className="mt-1 text-sm text-muted">Real drive telemetry, scored with one click.</p>
       {loading && <Loading label="Listing datasets" className="mt-5" />}
       {error && <ErrorState message={error} onRetry={reload} className="mt-5" />}
-      <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+      <ul className="mt-4 grid gap-2">
         {quick.map((d) => {
           const on = d.id === selected;
           return (
@@ -201,8 +208,8 @@ function SamplePicker({
             }}
             className="mt-1.5 block w-full rounded-lg border border-line bg-night px-3 py-2 text-sm text-ink"
           >
-            <option value="">Real 90-day exports and test files…</option>
-            {GROUPS.filter((g) => g.id !== "demo").map((g) => (
+            <option value="">Choose another dataset…</option>
+            {GROUPS.map((g) => (
               <optgroup key={g.id} label={g.title}>
                 {more
                   .filter((d) => d.group === g.id)

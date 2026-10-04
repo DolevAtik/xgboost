@@ -80,12 +80,12 @@ No Flask capability had to be added.
 |---|---|---|
 | Hero | headline, live 3D drive, real 30-day telemetry of a failing drive, key figures | `/api/demos/signal`, `/api/evaluation` |
 | The Problem | reactive vs predictive timeline (schematic, labelled) | failure count from `/api/evaluation` |
-| The Data | healthy vs failing drive, attribute by attribute | `/api/demos/signal` |
-| Technology | six-stage pipeline; the engine scoring two real drives | `/api/model`, live predictions |
-| Results | scale, top-K precision, the accuracy trap, lead time, PR/ROC-AUC | `/api/evaluation` |
-| Try It | drive explorer + XGBoost vs CNN comparison | live predictions, `/api/evaluation` |
+| Technology | six-stage pipeline; "Inside the engine" (two real drives scored live) behind a Go deeper toggle | `/api/model`, live predictions |
+| Results | top-K precision, the accuracy trap, lead time; standard metrics and methodology behind a Go deeper toggle | `/api/evaluation` |
+| Value | calculator: your fleet size and costs × the measured failure, catch and false-alarm rates | `/api/evaluation` |
 | Vision | fleet illustration (labelled as such) and directions | — |
 | Team | the three team members, roles and focus areas; photos from `public/team/` | `src/lib/team.ts` |
+| Try it live (last, highlighted) | upload or sample, ranked drives, drive profile; XGBoost vs CNN behind a Go deeper toggle | live predictions, `/api/evaluation` |
 
 Each visual is also viewable on its own in the artifact lab at `/#/lab`.
 
@@ -106,4 +106,7 @@ Each visual is also viewable on its own in the artifact lab at `/#/lab`.
 * 3D scenes are code-split and fall back to a static backdrop without WebGL.
   `prefers-reduced-motion` stops all animation.
 * Fonts are bundled (`@fontsource`); the site makes no external requests.
+* "Get in touch" opens the visitor's mail client with the message filled in. Set the
+  address in `src/lib/contact.ts` (`CONTACT.email`); until then the form says it is not configured.
+* Team content and photos: `src/lib/team.ts` and `public/team/`.
 * `STORYBOARD.md` is the original storyboard and content plan.

@@ -1,5 +1,6 @@
 import { StorySection } from "../components/StorySection";
 import { TechnicalDisclosure } from "../components/TechnicalDisclosure";
+import { Expandable } from "../components/Expandable";
 import { DataPipeline } from "./DataPipeline";
 import { IntelligenceVisualization } from "./IntelligenceVisualization";
 
@@ -17,11 +18,11 @@ export default function Intelligence() {
       lede="A six-stage pipeline turns daily counters into one decision per drive, with a leakage audit so the model never sees the answer. Select a stage for details."
     >
       <DataPipeline />
-      <div className="mt-14">
-        <h3 className="text-xl font-semibold tracking-tight">Inside the engine</h3>
-        <p className="mb-5 mt-1 max-w-3xl text-sm text-soft">
-          Two real drives, scored live by the model the product runs. Watch one month of telemetry become one number.
-        </p>
+      <Expandable
+        className="mt-6"
+        title="Inside the engine"
+        hint="Watch two real drives scored live: one month of telemetry becoming one risk score."
+      >
         <div className="panel">
           <IntelligenceVisualization />
         </div>
@@ -33,11 +34,10 @@ export default function Intelligence() {
           <p>
             We also trained a <b>dilated 1-D convolutional network (CNN)</b> on the exact same windows. It reads the raw
             day-by-day sequence, so it sees the order of events and not only their summary. On held-out drives it ranked
-            less well, and it cannot be explained feature by feature, so XGBoost is the default. Both can be run side by
-            side in the product (Interactive demo).
+            less well, and it cannot be explained feature by feature, so XGBoost is the default.
           </p>
         </TechnicalDisclosure>
-      </div>
+      </Expandable>
     </StorySection>
   );
 }

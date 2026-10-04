@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Check, Circle } from "lucide-react";
 import type { Evaluation } from "../../shared/types";
-import { CountUp } from "../components/CountUp";
+import { Expandable } from "../components/Expandable";
 import { StorySection } from "../components/StorySection";
 import { ErrorState, Loading, Source } from "../components/States";
 import { TechnicalDisclosure } from "../components/TechnicalDisclosure";
@@ -12,28 +12,6 @@ import { fmtInt, fmtPct } from "../lib/format";
 import { useRise } from "../lib/motion";
 
 const tooltipStyle = { background: "#0a1122", border: "1px solid rgba(148,163,200,.24)", borderRadius: 10, fontSize: 12 };
-
-function ScaleRow({ e }: { e: Evaluation }) {
-  const items = [
-    { v: e.scale.drives, f: fmtInt, l: "drives in the study" },
-    { v: e.scale.driveDays, f: fmtInt, l: "days of telemetry" },
-    { v: e.scale.testWindows, f: fmtInt, l: "test cases, on drives never seen in training" },
-    { v: e.scale.baseRate * 100, f: (n: number) => `${n.toFixed(2)}%`, l: "of test cases end in failure — the real-world rarity" },
-  ];
-  return (
-    <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border hairline bg-line sm:grid-cols-2 lg:grid-cols-4">
-      {items.map((it) => (
-        <div key={it.l} className="bg-night/95 p-6">
-          <dt className="sr-only">{it.l}</dt>
-          <dd className="text-[clamp(1.5rem,2vw,2rem)] font-semibold leading-none tracking-tight tabular-nums text-ink">
-            <CountUp value={it.v} format={it.f} />
-          </dd>
-          <dd className="mt-2 max-w-[26ch] text-xs leading-relaxed text-muted">{it.l}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
 
 /** K dots, one per ranked drive: filled = really failed, hollow = did not. */
 function TopK({ e }: { e: Evaluation }) {
@@ -234,73 +212,81 @@ export function PerformanceProof() {
 
   return (
     <div className="space-y-6">
-      <ScaleRow e={e} />
       <TopK e={e} />
       <AccuracyTrap e={e} />
       <LeadTime e={e} />
 
-      {xgb && (
-        <div className="grid gap-px overflow-hidden rounded-2xl border hairline bg-line sm:grid-cols-2">
-          {[
-            {
-              v: xgb.prAuc,
-              base: e.scale.baseRate,
-              t: "Ranking quality on rare events (PR-AUC)",
-              d: `A random ranking would score ${e.scale.baseRate.toFixed(4)}. Ours is about ${Math.round(xgb.prAuc / e.scale.baseRate)}× that.`,
-            },
-            {
-              v: xgb.rocAuc,
-              base: 0.5,
-              t: "Separation of failing from healthy (ROC-AUC)",
-              d: `Pick one failing and one healthy case at random: ${fmtPct(xgb.rocAuc, 0)} of the time the failing one is ranked higher. Random is 50%.`,
-            },
-          ].map((m) => (
-            <div key={m.t} className="bg-night/95 p-6 md:p-7">
-              <p className="num text-4xl">{m.v.toFixed(3)}</p>
-              <p className="mt-3 text-soft">{m.t}</p>
-              <p className="mt-2 text-sm text-muted">{m.d}</p>
+      <p className="text-xs leading-relaxed text-muted">
+        Scope: tested on one large public fleet (Backblaze, {e.scale.quarters.length} quarters). Any new fleet should be validated on its
+        own history before relying on these numbers.
+      </p>
+      <Expandable
+        title="Standard ML metrics and methodology"
+        hint={`PR-AUC ${xgb?.prAuc.toFixed(3)} · ROC-AUC ${xgb?.rocAuc.toFixed(3)}, and how precision, thresholds and lead time were measured.`}
+      >
+          {xgb && (
+            <div className="grid gap-px overflow-hidden rounded-2xl border hairline bg-line sm:grid-cols-2">
+              {[
+                {
+                  v: xgb.prAuc,
+                  base: e.scale.baseRate,
+                  t: "Ranking quality on rare events (PR-AUC)",
+                  d: `A random ranking would score ${e.scale.baseRate.toFixed(4)}. Ours is about ${Math.round(xgb.prAuc / e.scale.baseRate)}× that.`,
+                },
+                {
+                  v: xgb.rocAuc,
+                  base: 0.5,
+                  t: "Separation of failing from healthy (ROC-AUC)",
+                  d: `Pick one failing and one healthy case at random: ${fmtPct(xgb.rocAuc, 0)} of the time the failing one is ranked higher. Random is 50%.`,
+                },
+              ].map((m) => (
+                <div key={m.t} className="bg-night/95 p-6 md:p-7">
+                  <p className="num text-4xl">{m.v.toFixed(3)}</p>
+                  <p className="mt-3 text-soft">{m.t}</p>
+                  <p className="mt-2 text-sm text-muted">{m.d}</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      <div className="pt-4">
-        <TechnicalDisclosure title="Why precision@K is the right measure for a rare-event problem">
-          <p>
-            With a {fmtPct(e.scale.baseRate, 2)} base rate, accuracy and ROC-AUC are dominated by the {fmtInt(e.confusion.tn)}{" "}
-            easy healthy cases. An operator does not act on every drive. They act on a short list. <b>Precision@K</b> asks
-            exactly that question: of the K drives at the top of the list, how many really fail? The drive-level ladder is
-            read from <code>w2022x_cnn_vs_xgboost_precision_at_k.csv</code>.
-          </p>
-          <p>
-            <b>PR-AUC</b> summarises precision across every possible list length. Its baseline is the base rate (
-            {e.scale.baseRate.toFixed(4)}), not 0.5, which is why {xgb?.prAuc.toFixed(3)} is a strong result here even
-            though it looks modest next to the ROC-AUC.
-          </p>
-        </TechnicalDisclosure>
-        <TechnicalDisclosure title="Ranking performance versus the decision threshold">
-          <p>
-            The ranking is the product: sort the fleet, work from the top. The threshold ({e.confusion.threshold.toFixed(3)},
-            tuned on validation F1) decides only where “inspect” starts. At that threshold, on {fmtInt(e.confusion.n)} test
-            windows, {fmtPct(xgb?.precision ?? 0)} of flagged windows were real failures and{" "}
-            {fmtPct(xgb?.recall ?? 0)} of failing windows were flagged ({fmtInt(e.confusion.tp)} true alerts,{" "}
-            {fmtInt(e.confusion.fp)} false alarms, {fmtInt(e.confusion.fn)} missed).
-          </p>
-          <p>
-            These figures are measured at the fleet's real failure rate, on drives held out from training. They are not from
-            a balanced sample, where the same model would look far better. Precision figures from the separate Toshiba
-            cohort study are inflated by construction and are not shown here as performance.
-          </p>
-        </TechnicalDisclosure>
-        <TechnicalDisclosure title="How the lead-time curve was measured">
-          <p>
-            Each failing test drive is scored with its 30-day window ending 0 to 90 days before its failure (
-            <code>w2022x_lead_time_failing.csv</code>). The curve is the share of drives scoring above the threshold at each
-            distance. The headline shares count a drive once if it was flagged on any day inside the 30-day horizon (or,
-            for “a week before”, on any day 7 to 29 days out).
-          </p>
-        </TechnicalDisclosure>
-      </div>
+          <div className="pt-2">
+            <TechnicalDisclosure title="Why precision@K is the right measure for a rare-event problem">
+              <p>
+                With a {fmtPct(e.scale.baseRate, 2)} base rate, accuracy and ROC-AUC are dominated by the {fmtInt(e.confusion.tn)}{" "}
+                easy healthy cases. An operator does not act on every drive. They act on a short list. <b>Precision@K</b> asks
+                exactly that question: of the K drives at the top of the list, how many really fail? The drive-level ladder is
+                read from <code>w2022x_cnn_vs_xgboost_precision_at_k.csv</code>.
+              </p>
+              <p>
+                <b>PR-AUC</b> summarises precision across every possible list length. Its baseline is the base rate (
+                {e.scale.baseRate.toFixed(4)}), not 0.5, which is why {xgb?.prAuc.toFixed(3)} is a strong result here even
+                though it looks modest next to the ROC-AUC.
+              </p>
+            </TechnicalDisclosure>
+            <TechnicalDisclosure title="Ranking performance versus the decision threshold">
+              <p>
+                The ranking is the product: sort the fleet, work from the top. The threshold ({e.confusion.threshold.toFixed(3)},
+                tuned on validation F1) decides only where “inspect” starts. At that threshold, on {fmtInt(e.confusion.n)} test
+                windows, {fmtPct(xgb?.precision ?? 0)} of flagged windows were real failures and{" "}
+                {fmtPct(xgb?.recall ?? 0)} of failing windows were flagged ({fmtInt(e.confusion.tp)} true alerts,{" "}
+                {fmtInt(e.confusion.fp)} false alarms, {fmtInt(e.confusion.fn)} missed).
+              </p>
+              <p>
+                These figures are measured at the fleet's real failure rate, on drives held out from training. They are not from
+                a balanced sample, where the same model would look far better. Precision figures from the separate Toshiba
+                cohort study are inflated by construction and are not shown here as performance.
+              </p>
+            </TechnicalDisclosure>
+            <TechnicalDisclosure title="How the lead-time curve was measured">
+              <p>
+                Each failing test drive is scored with its 30-day window ending 0 to 90 days before its failure (
+                <code>w2022x_lead_time_failing.csv</code>). The curve is the share of drives scoring above the threshold at each
+                distance. The headline shares count a drive once if it was flagged on any day inside the 30-day horizon (or,
+                for “a week before”, on any day 7 to 29 days out).
+              </p>
+            </TechnicalDisclosure>
+          </div>
+      </Expandable>
       <Source>{e.sources.slice(0, 5).join(" · ")}</Source>
     </div>
   );
@@ -318,7 +304,7 @@ export default function PerformanceMetrics() {
         </>
       }
       band
-      lede="Measured on real fleet data at its true failure rate, on drives the model never saw during training. The numbers below are read directly from the evaluation files."
+      lede="Measured on real fleet data at its true failure rate, on drives the model never saw during training."
     >
       <PerformanceProof />
     </StorySection>

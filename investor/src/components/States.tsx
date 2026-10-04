@@ -1,4 +1,4 @@
-import { AlertTriangle, RotateCw } from "lucide-react";
+import { AlertTriangle, Info, RotateCw } from "lucide-react";
 import type { ReactNode } from "react";
 
 export function Loading({ label = "Loading", className = "" }: { label?: string; className?: string }) {
@@ -27,7 +27,22 @@ export function ErrorState({ message, onRetry, className = "" }: { message: stri
   );
 }
 
-/** Names the file a number came from. Every figure on the page has one. */
+/**
+ * Names the files a figure came from. Kept out of the reader's way: a small "Source"
+ * marker that reveals the detail on hover or focus.
+ */
 export function Source({ children }: { children: ReactNode }) {
-  return <p className="mt-4 font-mono text-[11px] leading-relaxed text-faint">Source: {children}</p>;
+  return (
+    <div className="group relative mt-3 inline-block">
+      <button type="button" className="inline-flex items-center gap-1 text-[11px] text-faint hover:text-muted focus-visible:text-muted">
+        <Info size={11} aria-hidden /> Source
+      </button>
+      <p
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 w-max max-w-[min(32rem,80vw)] rounded-lg border hairline bg-void px-3 py-2 font-mono text-[11px] leading-relaxed text-muted opacity-0 shadow-xl transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+      >
+        {children}
+      </p>
+    </div>
+  );
 }

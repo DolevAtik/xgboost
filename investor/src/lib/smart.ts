@@ -37,5 +37,3 @@ export function featureLabel(feature: string): { title: string; detail: string }
   return { title: base, detail: `${diff}${aggText}` };
 }
 
-/** The attributes the Signal chapter leads with, in story order. */
-export const SIGNAL_ATTRS = ["smart_197_raw", "smart_198_raw", "smart_5_raw", "smart_194_raw"] as const;

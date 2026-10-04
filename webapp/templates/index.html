@@ -129,6 +129,34 @@
           border-top-color:var(--blue); border-radius:50%; animation:sp .8s linear infinite;
           vertical-align:-2px; margin-right:7px; }
   @keyframes sp { to { transform:rotate(360deg); } }
+
+  /* upload feedback: a progress bar while the bytes move, a toast when it lands */
+  .prog { height:6px; background:var(--line); border-radius:4px; overflow:hidden;
+          margin-top:10px; }
+  .prog i { display:block; height:100%; width:0; background:var(--blue);
+            border-radius:4px; transition:width .15s linear; }
+  .prog.indet i { width:35%; animation:slide 1.1s ease-in-out infinite; }
+  @keyframes slide { 0% { margin-left:-35%; } 100% { margin-left:100%; } }
+
+  #toasts { position:fixed; right:18px; bottom:18px; z-index:60; display:flex;
+            flex-direction:column; gap:10px; width:min(400px, calc(100vw - 36px));
+            pointer-events:none; }
+  .toast { background:var(--card); border:1px solid var(--line); border-left:4px solid;
+           border-radius:8px; padding:11px 13px; box-shadow:0 8px 28px rgba(0,0,0,.18);
+           animation:pop .18s ease-out; pointer-events:auto; }
+  .toast.ok  { border-left-color:var(--green); }
+  .toast.err { border-left-color:var(--red); }
+  .toast.info{ border-left-color:var(--blue); }
+  .toast .tt { font-weight:650; font-size:13.5px; display:flex; gap:7px;
+               align-items:baseline; }
+  .toast .tb { font-size:12.5px; color:var(--muted); margin-top:3px; }
+  .toast .tx { margin-left:auto; cursor:pointer; color:var(--muted); border:0;
+               background:none; font-size:16px; line-height:1; padding:0 2px; }
+  .toast .ta { margin-top:8px; font-size:12.5px; padding:4px 10px; }
+  @keyframes pop { from { opacity:0; transform:translateY(8px); } }
+  @keyframes flash { 0%,100% { box-shadow:0 0 0 0 transparent; }
+                     30% { box-shadow:0 0 0 3px var(--sel); } }
+  .flash { animation:flash 1.1s ease-out; }
   .swatch { display:inline-block; width:9px; height:9px; border-radius:2px;
             vertical-align:0; margin-right:4px; }
 </style>
@@ -167,8 +195,8 @@
       <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv,.parquet" class="hidden">
     </div>
     <label class="row" style="margin-top:13px; cursor:pointer; gap:7px">
-      <input type="checkbox" id="pad">
-      <span>Also score drives with a partial window</span>
+      <input type="checkbox" id="strict">
+      <span>Only score drives with a full window</span>
       <span class="note" id="padnote"></span>
     </label>
     <div class="row" style="margin-top:13px" id="examples"></div>
@@ -182,14 +210,21 @@
 
 </main>
 
+<!-- Upload outcomes land here, pinned to the viewport: the results render below the
+     fold, so without this a successful score looks identical to nothing happening. -->
+<div id="toasts" role="status" aria-live="polite"></div>
+
 <script>
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-let META = null, RUN = null, KINDS = [], RESULT = null, LAST = null;
+let META = null, RUN = null, KINDS = [], RESULT = null, LAST = null, CHOSEN = null;
 
 const fmt = (x,d=3) => (x==null || Number.isNaN(x)) ? "—" : Number(x).toFixed(d);
 const pct = x => x==null ? "—" : (100*x).toFixed(1) + "%";
 const num = x => x==null ? "—" : Number(x).toLocaleString();
+// The server rounds to a tenth, so anything quicker than that prints as "0s",
+// which reads like a failure rather than a fast answer.
+const secs = x => x < 0.05 ? "under 0.1s" : `${x}s`;
 const esc = s => String(s).replace(/[&<>"]/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const COLOR = { xgb:"var(--red)", cnn:"var(--blue)" };
@@ -291,16 +326,22 @@ function renderModel() {
   $("#modeldetails").innerHTML = modelDetails();
 
   // input card copy, which is all window-length dependent
-  $("#droptitle").textContent = `Drop a telemetry file here`;
-  $("#dropnote").innerHTML =
-    `or click to choose &nbsp;·&nbsp; <span class="mono">.xlsx</span>,
-     <span class="mono">.csv</span> or <span class="mono">.parquet</span>
-     &nbsp;·&nbsp; one drive or a whole fleet`;
+  // Only when no file is loaded: toggling estimators re-renders this card, and
+  // wiping the filename would make the page look like it forgot what it just scored.
+  if (!CHOSEN) {
+    $("#droptitle").textContent = `Drop a telemetry file here`;
+    $("#dropnote").innerHTML =
+      `or click to choose &nbsp;·&nbsp; <span class="mono">.xlsx</span>,
+       <span class="mono">.csv</span> or <span class="mono">.parquet</span>
+       &nbsp;·&nbsp; one drive or a whole fleet`;
+  }
   $("#padnote").innerHTML =
-    `— a drive that stopped reporting partway through holds fewer than ${w} days. Off it
-     is skipped; on it is left-padded to ${w} and scored anyway, and the row is marked
-     <span class="pill warn">partial</span>. In a historical file the drives that failed
-     are usually the short ones.`;
+    `— a drive that stopped reporting partway through holds fewer than ${w} days. By
+     default it is left-padded to ${w} and scored anyway, automatically and only where it
+     is needed: the row is marked <span class="pill warn">partial</span> with the days it
+     really had, and a drive that already holds ${w} days scores identically either way.
+     Tick this to score continuous windows only — calibrated, but in a historical file it
+     hides most of the drives that failed, because those are exactly the short ones.`;
   $("#inputrules").innerHTML =
     `The file needs a <span class="mono">date</span> column, a
      <span class="mono">serial_number</span> column, and at least <span class="mono">${w}
@@ -420,41 +461,167 @@ async function loadSamples() {
     c.onclick = () => runSample(c.dataset.rel, c.dataset.label));
 
   const p = new URLSearchParams(location.search);
-  if (p.get("pad") === "1") $("#pad").checked = true;
+  // ?pad=0 and ?strict=1 both ask for full windows only; ?pad=1 is now the default.
+  if (p.get("pad") === "0" || p.get("strict") === "1") $("#strict").checked = true;
   if (p.get("sample")) runSample(p.get("sample"), p.get("sample"));
 }
 
+/* --------------------------------------------------------------- toasts */
+/* The results card renders below the fold, so "it worked" and "nothing happened" look
+   the same from the top of the page. Every upload now ends in a toast either way.
+   Successes clear themselves; failures stay until dismissed, because an error you
+   scrolled past is the thing that wasted your time in the first place. */
+function toast({kind = "info", title, body = "", action = null, ms = 7000}) {
+  const el = document.createElement("div");
+  el.className = `toast ${kind}`;
+  const icon = kind === "ok" ? "✓" : kind === "err" ? "✕" : "•";
+  el.innerHTML = `
+    <div class="tt"><span style="color:var(--${
+      kind === "ok" ? "green" : kind === "err" ? "red" : "blue"})">${icon}</span>
+      <span>${esc(title)}</span>
+      <button class="tx" title="dismiss">×</button></div>
+    ${body ? `<div class="tb">${body}</div>` : ""}
+    ${action ? `<button class="ta">${esc(action.label)}</button>` : ""}`;
+  el.querySelector(".tx").onclick = () => el.remove();
+  if (action) el.querySelector(".ta").onclick = () => { action.run(); el.remove(); };
+  $("#toasts").appendChild(el);
+  // Never let them stack past a handful; the oldest is the least interesting.
+  const all = $$("#toasts .toast");
+  if (all.length > 4) all[0].remove();
+  if (ms) setTimeout(() => el.remove(), ms);
+  return el;
+}
+
+/* ------------------------------------------------------------- requests */
+/* XMLHttpRequest rather than fetch, purely for `upload.onprogress`: a 115k-row
+   workbook is tens of megabytes and spends real time on the wire, and a spinner that
+   cannot say whether it is at 5% or 95% is what makes an upload feel broken. */
+function request(url, {method = "POST", body, headers = {}}, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    for (const k in headers) xhr.setRequestHeader(k, headers[k]);
+    if (onProgress && xhr.upload) {
+      xhr.upload.onprogress = e => onProgress(e.lengthComputable ? e.loaded / e.total : null);
+      xhr.upload.onload = () => onProgress(1);
+    }
+    xhr.onload = () => {
+      let data;
+      try { data = JSON.parse(xhr.responseText); }
+      catch {
+        return reject(new Error(xhr.status === 413
+          ? "the file is larger than the 400 MB upload limit — score it as .csv or "
+            + ".parquet, which are far smaller than .xlsx, or split it by drive"
+          : `the server returned ${xhr.status} and not JSON`));
+      }
+      resolve({ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data});
+    };
+    xhr.onerror = () => reject(new Error(
+      "could not reach the server — is `python webapp/app.py` still running?"));
+    xhr.onabort = () => reject(new Error("the upload was cancelled"));
+    xhr.send(body);
+  });
+}
+
 /* -------------------------------------------------------------- running */
-function busy(msg) {
-  $("#status").innerHTML = `<div class="card"><span class="spin"></span>${msg}</div>`;
+function busy(label, withProgress) {
+  $("#status").innerHTML = `
+    <div class="card">
+      <div><span class="spin"></span><span id="busytext">Uploading
+        <strong>${esc(label)}</strong>…</span></div>
+      <div class="prog ${withProgress ? "" : "indet"}"><i id="busybar"></i></div>
+    </div>`;
   $("#out").innerHTML = ""; $("#detail").classList.add("hidden");
 }
-const fail = msg => { $("#status").innerHTML = `<div class="err">${esc(msg)}</div>`; };
-
-async function send(url, opts, label) {
-  busy(`Reading and scoring <strong>${esc(label)}</strong>… a large family workbook can
-        take 20–30 seconds, nearly all of it spreadsheet parsing.`);
-  try {
-    const r = await fetch(url, opts);
-    const d = await r.json();
-    if (!r.ok || d.error) return fail(d.error || `request failed (${r.status})`);
-    $("#status").innerHTML = "";
-    RESULT = d; render(d);
-  } catch (e) { fail(String(e)); }
+function phase(html, indeterminate) {
+  const t = $("#busytext"); if (t) t.innerHTML = html;
+  const p = $("#status .prog"); if (p) p.classList.toggle("indet", !!indeterminate);
 }
-const padOn = () => $("#pad").checked;
+function fail(label, msg) {
+  $("#status").innerHTML = `<div class="err"><strong>${esc(label)}</strong> was not
+    scored.<br>${esc(msg)}</div>`;
+  toast({kind: "err", title: `${label} — not scored`, body: esc(msg), ms: 0});
+}
+
+async function send(url, opts, label, isUpload) {
+  busy(label, isUpload);
+  try {
+    const r = await request(url, opts, isUpload ? frac => {
+      const bar = $("#busybar");
+      if (frac == null || !bar) return;
+      bar.style.width = `${(frac * 100).toFixed(0)}%`;
+      if (frac >= 1) phase(`Scoring <strong>${esc(label)}</strong>… a large workbook can
+        take 20–30 seconds, nearly all of it spreadsheet parsing.`, true);
+    } : null);
+    if (!isUpload) phase(`Scoring <strong>${esc(label)}</strong>…`, true);
+
+    if (!r.ok || r.data.error) {
+      return fail(label, r.data.error || `the request failed (${r.status})`);
+    }
+    $("#status").innerHTML = "";
+    RESULT = r.data;
+    render(r.data);
+    succeeded(label, r.data);
+  } catch (e) {
+    fail(label, e.message || String(e));
+  }
+}
+
+/* What actually happened, in one line, pinned where you cannot miss it. */
+function succeeded(label, d) {
+  const g = d.diagnostics, s = d.summary[d.primary];
+  const bits = [
+    `<strong>${num(g.drives_scored)}</strong> drive${g.drives_scored === 1 ? "" : "s"}
+     scored from ${num(g.rows)} rows in ${secs(d.seconds)}`,
+    `<strong style="color:var(--red)">${num(s.inspect)}</strong> flagged
+     <em>inspect</em>, ${num(s.hold)} <em>hold</em>`,
+  ];
+  if (g.attributes_missing.length)
+    bits.push(`<span style="color:var(--warnink)">${g.attributes_missing.length} of
+      ${RUN.attributes.length} attributes missing</span>, filled with the training median`);
+  if (g.drives_skipped)
+    bits.push(`<span style="color:var(--warnink)">${num(g.drives_skipped)} drive(s)
+      skipped</span> for holding under ${d.min_days} days`);
+  if (g.drives_padded)
+    bits.push(`${num(g.drives_padded)} drive(s) left-padded — those scores are an
+      extrapolation`);
+  if (g.notes.length) bits.push(esc(g.notes.join("; ")));
+
+  toast({
+    kind: "ok",
+    title: `${label} — scored`,
+    body: bits.join("<br>"),
+    action: {label: "show the ranking", run: showResults},
+    ms: 9000,
+  });
+  // Jump to the table only if it is not already on screen, so re-running with a
+  // different model does not yank the page around while you are reading it.
+  const box = $("#out");
+  const r = box.getBoundingClientRect();
+  if (r.top > window.innerHeight * 0.75 || r.bottom < 0) showResults();
+}
+function showResults() {
+  const box = $("#out");
+  box.scrollIntoView({behavior: "smooth", block: "start"});
+  const card = box.querySelector(".card");
+  if (card) { card.classList.remove("flash"); void card.offsetWidth;
+              card.classList.add("flash"); }
+}
+
+const padOn = () => !$("#strict").checked;
 const runFile = f => {
   LAST = () => runFile(f);
   const fd = new FormData();
   fd.append("file", f); fd.append("pad", padOn() ? "1" : "0");
   fd.append("run", RUN.key); fd.append("models", KINDS.join(","));
-  send("/api/predict", {method:"POST", body:fd}, f.name);
+  send("/api/predict", {method: "POST", body: fd}, f.name, true);
 };
 const runSample = (rel, label) => {
   LAST = () => runSample(rel, label);
+  CHOSEN = null;
   send("/api/predict-sample",
-    {method:"POST", headers:{"Content-Type":"application/json"},
-     body:JSON.stringify({rel, pad:padOn(), run:RUN.key, models:KINDS})}, label);
+    {method: "POST", headers: {"Content-Type": "application/json"},
+     body: JSON.stringify({rel, pad: padOn(), run: RUN.key, models: KINDS})}, label, false);
 };
 
 /* --------------------------------------------------------------- charts */
@@ -530,7 +697,7 @@ function render(d) {
     <div class="card">
       <div class="row" style="margin-bottom:12px">
         <strong>${esc(d.source)}</strong>
-        <span class="note">parsed and scored in ${d.seconds}s · inference ${speed}</span>
+        <span class="note">parsed and scored in ${secs(d.seconds)} · inference ${speed}</span>
         <span class="spacer"></span>
         <span class="note mono">${esc(RUN.label)} · ${kinds.map(k =>
           est(k).label).join(" + ")}</span>
@@ -743,15 +910,59 @@ async function showDrive(serial) {
 
 /* ----------------------------------------------------------------- wire */
 const drop = $("#drop"), input = $("#file");
+const OK_EXT = [".xlsx", ".xlsm", ".xls", ".csv", ".txt", ".parquet"];
+const sizeOf = b => b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} kB`;
+
+/* Checked here as well as on the server so the answer is instant, and so the reason is
+   about the file you picked rather than a 400 from an endpoint you did not know about. */
+function accept(f) {
+  if (!f) return;
+  const ext = (f.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+  if (!OK_EXT.includes(ext)) {
+    toast({kind: "err", ms: 0, title: `${f.name} — not a supported file`,
+           body: `This reads <span class="mono">${OK_EXT.join("</span>, <span class='mono'>")}
+                  </span>. A <span class="mono">${esc(ext) || "extension-less"}</span> file
+                  cannot be parsed as a table.`});
+    return;
+  }
+  if (f.size === 0) {
+    toast({kind: "err", ms: 0, title: `${f.name} — the file is empty`});
+    return;
+  }
+  CHOSEN = f;
+  $("#droptitle").textContent = f.name;
+  $("#dropnote").innerHTML = `${sizeOf(f.size)} · click to choose a different file`;
+  runFile(f);
+}
+
 drop.onclick = () => input.click();
-input.onchange = () => input.files[0] && runFile(input.files[0]);
-["dragenter","dragover"].forEach(e => drop.addEventListener(e, ev => {
+input.onchange = () => { accept(input.files[0]); input.value = ""; };
+["dragenter", "dragover"].forEach(e => drop.addEventListener(e, ev => {
   ev.preventDefault(); drop.classList.add("over"); }));
-["dragleave","drop"].forEach(e => drop.addEventListener(e, ev => {
+["dragleave", "drop"].forEach(e => drop.addEventListener(e, ev => {
   ev.preventDefault(); drop.classList.remove("over"); }));
 drop.addEventListener("drop", ev => {
-  const f = ev.dataTransfer.files[0]; if (f) runFile(f); });
-$("#pad").onchange = () => { if (LAST) LAST(); };
+  ev.stopPropagation();
+  const fs = ev.dataTransfer.files;
+  if (fs.length > 1)
+    toast({kind: "info", title: `${fs.length} files dropped`,
+           body: `Only <span class="mono">${esc(fs[0].name)}</span> was scored — this
+                  takes one file at a time.`});
+  accept(fs[0]);
+});
+
+/* A file dropped anywhere but the zone makes the browser navigate to it, which throws
+   away the page and any result on it. Swallow those and say where it should have gone. */
+window.addEventListener("dragover", ev => ev.preventDefault());
+window.addEventListener("drop", ev => {
+  ev.preventDefault();
+  if (ev.dataTransfer.files.length)
+    toast({kind: "info", title: "Dropped outside the box",
+           body: "Drop the file on the dashed area near the top of the page, or click it "
+                 + "to browse."});
+});
+
+$("#strict").onchange = () => { if (LAST) LAST(); };
 
 boot();
 </script>

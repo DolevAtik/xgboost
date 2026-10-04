@@ -185,18 +185,27 @@ def ranking_quality(rows: list[dict], key: str) -> dict | None:
 
 
 def predict_frame(df: pd.DataFrame, source: str, run: scoring.Run,
-                  kinds: list[str], pad_short: bool = False) -> dict:
+                  kinds: list[str], pad_short: bool = True) -> dict:
     """Validate, window, score with each requested estimator. Returns the page payload.
 
     `pad_short` decides what happens to a drive with less than a full window of history.
-    Off (the default) it is skipped, which is the honest answer: the model was trained on
-    genuinely continuous days and that is what it is calibrated for. On, the drive is
-    left-padded to the window length and scored anyway.
+    On (the default) the drive is left-padded to the window length and scored anyway; off,
+    it is skipped and only genuinely continuous windows are scored.
 
-    That switch matters more than it looks. In a *historical* workbook the drives that
-    failed are exactly the ones that stopped reporting partway through, so they are the
-    short ones -- strict mode skips the very drives a retrospective run wants to see.
-    Padded scores are an extrapolation and the page labels them as such.
+    On by default because padding is *additive and only where needed*: a drive is padded
+    only if it is short, and a drive that already holds a full window is built from its
+    own span and scaled with the training statistics either way, so its score is bit-for-bit
+    the same in both modes. Turning this off therefore never improves a score -- it only
+    removes rows.
+
+    And it removes the rows that matter most. In a *historical* file the drives that failed
+    are exactly the ones that stopped reporting partway through, so they are the short ones:
+    strict mode hides the very drives a retrospective run wants to see. On one 30-day chunk
+    of the Q1 2026 fleet, strict left 1 recorded failure among the scored drives and this
+    left 80.
+
+    Padded scores are still an extrapolation, not a calibrated prediction, so every padded
+    row is labelled with the days it really had and the count is reported in diagnostics.
     """
     t0 = time.time()
     contract = run.contract
@@ -241,9 +250,11 @@ def predict_frame(df: pd.DataFrame, source: str, run: scoring.Run,
         raise ValueError(
             f"no drive in this file has {floor} days of telemetry -- the longest run is "
             f"{longest} days."
-            + ("" if pad_short else
-               f" The model needs a full {window_days}-day window; tick “also score "
-               f"drives with a partial window” to score shorter runs anyway."))
+            + (f" Partial windows are already being padded, down to a floor of {floor} "
+               f"days, so this file is short even for that -- collect more history."
+               if pad_short else
+               f" The model needs a full {window_days}-day window; untick “only score "
+               f"drives with a full window” to pad shorter runs and score them anyway."))
 
     frame = scored[["serial_number", "date", "failure"] + attrs].rename(
         columns={"serial_number": "id", "date": "time"})
@@ -457,7 +468,7 @@ def api_predict():
         return jsonify({"error": "no file was uploaded"}), 400
     run = run_for(request.form.get("run"))
     try:
-        pad = request.form.get("pad") == "1"
+        pad = request.form.get("pad", "1") != "0"   # padded unless asked not to
         df = read_table(io.BytesIO(f.read()), f.filename)
         return jsonify(predict_frame(df, f.filename, run, _requested(run), pad))
     except ValueError as e:
@@ -474,7 +485,7 @@ def api_predict_sample():
     `rel` cannot walk out of it and read something else off the disk.
     """
     body = request.json or {}
-    rel, pad = body.get("rel", ""), bool(body.get("pad"))
+    rel, pad = body.get("rel", ""), bool(body.get("pad", True))
     run = run_for(body.get("run"))
     target = os.path.realpath(os.path.join(SAMPLE_DIR, rel))
     if (not target.startswith(os.path.realpath(SAMPLE_DIR) + os.sep)

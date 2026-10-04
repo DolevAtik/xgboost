@@ -1,0 +1,97 @@
+{
+  "run": "backblaze_2022x_w30",
+  "window_days": 30,
+  "floor_days": 10,
+  "attributes": [
+    "smart_197_raw",
+    "smart_5_raw",
+    "smart_198_raw",
+    "smart_4_raw",
+    "smart_12_raw",
+    "smart_9_raw",
+    "smart_240_raw",
+    "smart_193_raw",
+    "smart_1_raw",
+    "smart_7_raw",
+    "smart_3_raw",
+    "smart_192_raw",
+    "smart_194_raw",
+    "smart_199_raw",
+    "smart_10_raw"
+  ],
+  "smartctl_names": {
+    "smart_1_raw": "Raw_Read_Error_Rate",
+    "smart_3_raw": "Spin_Up_Time",
+    "smart_4_raw": "Start_Stop_Count",
+    "smart_5_raw": "Reallocated_Sector_Ct",
+    "smart_7_raw": "Seek_Error_Rate",
+    "smart_9_raw": "Power_On_Hours",
+    "smart_10_raw": "Spin_Retry_Count",
+    "smart_12_raw": "Power_Cycle_Count",
+    "smart_192_raw": "Power-Off_Retract_Count",
+    "smart_193_raw": "Load_Cycle_Count",
+    "smart_194_raw": "Temperature_Celsius",
+    "smart_197_raw": "Current_Pending_Sector",
+    "smart_198_raw": "Offline_Uncorrectable",
+    "smart_199_raw": "UDMA_CRC_Error_Count",
+    "smart_240_raw": "Head_Flying_Hours"
+  },
+  "files": [
+    {
+      "file": "01_healthy_drive.csv",
+      "rows": 30,
+      "drives": 1,
+      "kb": 3.7,
+      "what": "one drive, 30 clean days",
+      "expect": "risk 0.000 - hold"
+    },
+    {
+      "file": "02_failing_drive.csv",
+      "rows": 30,
+      "drives": 1,
+      "kb": 3.5,
+      "what": "one drive, its final 30 days",
+      "expect": "risk 0.995 - inspect"
+    },
+    {
+      "file": "03_fleet_60_drives.xlsx",
+      "rows": 1800,
+      "drives": 60,
+      "kb": 117.9,
+      "what": "60 drives, 20 of them failed",
+      "expect": "ranked list + the retrospective precision@K panel"
+    },
+    {
+      "file": "04_live_snapshot.xlsx",
+      "rows": 1195,
+      "drives": 40,
+      "kb": 76.7,
+      "what": "40 drives as of 2026-03-31, no failure column",
+      "expect": "a triage queue - no ground truth to check it against, which is the real case"
+    },
+    {
+      "file": "05_short_windows.xlsx",
+      "rows": 305,
+      "drives": 14,
+      "kb": 24.2,
+      "what": "14 drives holding 10-30 days",
+      "expect": "3 scored by default, all 14 with the partial-window box"
+    },
+    {
+      "file": "06_renamed_and_sparse.csv",
+      "rows": 1800,
+      "drives": 60,
+      "kb": 94.5,
+      "what": "headers timestamp/serial, only 6 of 15 attributes",
+      "expect": "aliases mapped, and a warning naming every attribute it had to impute"
+    },
+    {
+      "file": "smartctl_log.csv",
+      "rows": 206,
+      "drives": 6,
+      "kb": 21.5,
+      "what": "6 drives under smartctl attribute names",
+      "expect": "not directly scoreable - run convert.py on it first"
+    }
+  ]
+}

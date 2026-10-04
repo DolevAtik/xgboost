@@ -105,6 +105,11 @@ loads.
   precision@K ladder, XGBoost's gain ranking, the leakage audit's per-channel AUCs, and
   the depth-123 decision tree that memorised its training set, as the argument for an
   ensemble.
+- **Upload feedback** — a real progress bar while the bytes move (a 31 MB workbook is
+  not instant), then a toast naming the file and what happened to it: drives scored,
+  how many flagged, and any attribute that had to be imputed or drive that was skipped.
+  Successes clear themselves and offer a jump to the ranking; failures stay put until
+  dismissed. Nothing is ever silently accepted or silently dropped.
 - **Results** — every drive ranked by `P(fails within 30 days)`, with the decision
   threshold drawn *on each risk bar* (XGBoost's is 0.217, so "low-looking" scores can
   still be `inspect`), an `inspect`/`hold` call, and a CSV export carrying both models'
@@ -127,10 +132,24 @@ The app lays the uploaded rows on a dense daily calendar, replays the **saved** 
 not a freshly fitted one, which would be train/serve skew — and scores each drive's most
 recent window. Nothing is written to disk and nothing leaves the machine.
 
+### The investor site
+
+`investor/` is a product site in front of this app: the problem, how the system works,
+the evaluation results and a live demo, for a non-technical audience. It calls the Flask
+app for every prediction and changes nothing in it. `cd investor && npm install && npm run dev`,
+then <http://127.0.0.1:5173>. See [`investor/README.md`](investor/README.md).
+
 ### Ready-made input
 
-The page offers one-click chips: six purpose-built files from `data/examples/` (see that
-folder's README) and one real workbook per family from `data/Toshiba/`.
+**Start with [`demo/`](demo/README.md).** Bigger, more realistic files than the built-in
+chips — a 60-drive fleet with ground truth, a live snapshot with no answer key, truncated
+windows — plus `demo/TEMPLATE.csv` and a guide to **getting your own telemetry in**:
+the required schema, the fifteen SMART attributes and their `smartctl` names, and
+`demo/from_smartctl/collect.py`, a tested daily collector that writes the app's format
+directly. Rebuild with `python scripts/make_demo_data.py`.
+
+The page itself offers one-click chips: six purpose-built files from `data/examples/`
+(see that folder's README) and one real workbook per family from `data/Toshiba/`.
 
 | example | demonstrates | result |
 |---|---|---|
@@ -185,6 +204,10 @@ the 90-day window, and the class-imbalance bug that cost the most accuracy.
 │       ├── zips/                             45 published archives, ~35 GB
 │       ├── shards/                            one parquet per archive
 │       └── store/                             the memory-mapped window store
+├── demo/                                demo files + the "use your own data" guide
+│   ├── README.md                          the guide: schema, SMART names, three routes in
+│   ├── TEMPLATE.csv                       the schema, to copy
+│   └── from_smartctl/                     collect.py (daily scrape) + convert.py (reshape)
 ├── models/                              trained weights + their preprocessing configs
 ├── results/                             metric tables (CSV)
 │   └── figures/                           the plots the analysis notebook saves
@@ -199,6 +222,7 @@ the 90-day window, and the class-imbalance bug that cost the most accuracy.
     ├── make_window_notebook.py            regenerates either window notebook
     ├── make_analysis_notebook.py          regenerates Dataset_backblaze_Analysis.ipynb
     ├── make_example_workbooks.py          rebuilds data/examples/ from the parquet
+    ├── make_demo_data.py                  rebuilds demo/ from the parquet
     ├── leakage_audit.py                   step 1: column scoring, proxy detection, blocklist
     ├── run_full_archive_analysis.py       the three archive steps as a script
     ├── run_full_analysis.py               the older Toshiba-cohort run as a script

@@ -1,3 +1,4 @@
+import { Upload } from "lucide-react";
 import { StorySection } from "../components/StorySection";
 import { DriveExplorer } from "./DriveExplorer";
 import { ModelComparisonView } from "./ModelComparison";
@@ -10,10 +11,15 @@ export default function Product() {
       kicker="Interactive demo"
       title={
         <>
-          Explore a real fleet.
+          Try it on your own data.
         </>
       }
-      lede="Pick a dataset or upload your own telemetry. Every drive is scored live by the saved model, ranked by risk, and explained. Select a drive to see its history, trajectory and the signals behind its score."
+      lede="Upload your own drive telemetry, or try one of the samples. Every drive is scored live by the saved model, ranked by risk and explained."
+      action={
+        <a href="#upload" className="btn btn-primary">
+          <Upload size={15} aria-hidden /> Upload your file
+        </a>
+      }
     >
       <DriveExplorer />
       <div id="models" className="mt-16 scroll-mt-20">

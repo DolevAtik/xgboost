@@ -65,6 +65,7 @@ browser ──► Vite / built site ──► Node API (Express, :4000) ──�
 | `GET /api/models` | every trained run found, with its files in `models/` | Flask + `models/` |
 | `GET /api/evaluation` | scale, metrics, precision@K, lead time, tree ladder, leakage | `results/w2022x_*` |
 | `GET /api/demos` | scoreable datasets: `demo/`, `data/examples/`, small 90-day Toshiba exports | manifests + Flask `/api/samples` |
+| `GET /api/demos/template` | `demo/TEMPLATE.csv` as a download: the input schema with every column | `demo/` |
 | `GET /api/demos/signal` | raw telemetry of the healthy and failing demo drives | `demo/01_*.csv`, `demo/02_*.csv` |
 | `POST /api/demos/:id/predict?models=xgb,cnn&pad=1` | a prediction for a listed dataset | Flask `/api/predict` or `/api/predict-sample` |
 | `POST /api/predict` | a prediction for an uploaded file (multipart field `file`) | Flask `/api/predict`, streamed |
@@ -83,8 +84,8 @@ No Flask capability had to be added.
 | Technology | six-stage pipeline; the engine scoring two real drives | `/api/model`, live predictions |
 | Results | scale, top-K precision, the accuracy trap, lead time, PR/ROC-AUC | `/api/evaluation` |
 | Try It | drive explorer + XGBoost vs CNN comparison | live predictions, `/api/evaluation` |
-| Trust | leakage audit, drive-level split, memorisation control, limits | `/api/model`, `/api/evaluation` |
 | Vision | fleet illustration (labelled as such) and directions | — |
+| Team | the three team members, roles and focus areas; photos from `public/team/` | `src/lib/team.ts` |
 
 Each visual is also viewable on its own in the artifact lab at `/#/lab`.
 

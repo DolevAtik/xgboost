@@ -9,8 +9,8 @@ export const NAV_LINKS = [
   { id: "intelligence", label: "Technology" },
   { id: "breakthrough", label: "Results" },
   { id: "product", label: "Try It" },
-  { id: "trust", label: "Trust" },
   { id: "vision", label: "Vision" },
+  { id: "team", label: "Team" },
 ];
 
 function Logo() {

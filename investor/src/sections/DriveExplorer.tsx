@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Info, Upload, Wrench, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, HelpCircle, Info, Upload, Wrench, X } from "lucide-react";
 import type { DemoDataset, DriveDetail, DriveRow, EstimatorKind, Prediction } from "../../shared/types";
 import { RiskTrajectoryChart } from "../components/RiskTrajectoryChart";
 import { SHAPExplanation } from "../components/SHAPExplanation";
@@ -21,65 +21,44 @@ const GROUPS: { id: DemoDataset["group"]; title: string }[] = [
   { id: "example", title: "Engineering test files" },
 ];
 
-// ---------------------------------------------------------------- dataset picker
+// ---------------------------------------------------------------- choosing data
 
-function DatasetPicker({
-  demos,
-  selected,
+const ACCEPT = ".xlsx,.xlsm,.xls,.csv,.txt,.parquet";
+
+/** The primary way in: drop or choose your own telemetry file. */
+function UploadCard({
   busy,
-  onPick,
+  progress,
+  lastUpload,
   onFile,
 }: {
-  demos: Async<DemoDataset[]>;
-  selected: string | null;
   busy: boolean;
-  onPick: (d: DemoDataset) => void;
+  progress: number | null;
+  lastUpload: { name: string; drives: number } | null;
   onFile: (f: File) => void;
 }) {
-  const { data, error, loading, reload } = demos;
   const [drag, setDrag] = useState(false);
+  const [help, setHelp] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const choose = () => !busy && input.current?.click();
 
   return (
-    <div className="space-y-8">
-      {loading && <Loading label="Listing datasets" />}
-      {error && <ErrorState message={error} onRetry={reload} />}
-      {data &&
-        GROUPS.map((g) => {
-          const items = data.filter((d) => d.group === g.id);
-          if (!items.length) return null;
-          return (
-            <div key={g.id}>
-              <p className="kicker mb-3 text-[10px]">{g.title}</p>
-              <ul className="space-y-1">
-                {items.map((d) => {
-                  const on = d.id === selected;
-                  return (
-                    <li key={d.id}>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => onPick(d)}
-                        aria-pressed={on}
-                        className={`w-full rounded-xl px-3 py-2.5 text-left transition disabled:opacity-60 ${
-                          on ? "bg-signal/10 ring-1 ring-signal/50" : "hover:bg-deep/60"
-                        }`}
-                      >
-                        <span className="flex items-baseline justify-between gap-3">
-                          <span className={`text-sm ${on ? "text-ink" : "text-soft"}`}>{d.label}</span>
-                          <span className="num shrink-0 text-[11px] text-faint">{plural(d.drives, "drive")}</span>
-                        </span>
-                        <span className="mt-0.5 block truncate text-xs text-muted">{d.description}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          );
-        })}
+    <div id="upload" className="panel scroll-mt-24 border-signal/30">
+      <p className="kicker mb-1.5 text-[10px]">Option A · your own data</p>
+      <h3 className="text-lg font-semibold">Upload your drive telemetry</h3>
+      <p className="mt-1 text-sm text-muted">Daily SMART readings for one drive or a whole fleet. Results in seconds.</p>
 
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Upload a telemetry file: drop it here, or press Enter to choose one"
+        onClick={choose}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            choose();
+          }
+        }}
         onDragOver={(e) => {
           e.preventDefault();
           setDrag(true);
@@ -91,29 +70,161 @@ function DatasetPicker({
           const f = e.dataTransfer.files[0];
           if (f && !busy) onFile(f);
         }}
-        className={`rounded-2xl border border-dashed p-5 text-center transition ${drag ? "border-signal bg-signal/5" : "border-line-strong"}`}
+        className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-5 py-8 text-center transition ${
+          drag ? "border-signal bg-signal/10" : "border-signal/35 bg-signal/[0.03] hover:border-signal/70 hover:bg-signal/[0.06]"
+        } ${busy ? "pointer-events-none opacity-80" : ""}`}
       >
-        <Upload size={18} className="mx-auto text-muted" aria-hidden />
-        <p className="mt-2 text-sm text-soft">Upload your own telemetry</p>
-        <p className="mt-1 text-xs text-muted">.xlsx, .csv or .parquet · up to 400 MB · never stored</p>
-        <button type="button" disabled={busy} onClick={() => input.current?.click()} className="chip mt-3 hover:border-signal hover:text-ink">
-          Choose a file
-        </button>
-        <input
-          ref={input}
-          type="file"
-          accept=".xlsx,.xlsm,.xls,.csv,.txt,.parquet"
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onFile(f);
-            e.target.value = "";
-          }}
-        />
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-signal/15 text-signal">
+          <Upload size={22} aria-hidden />
+        </span>
+        {progress !== null ? (
+          <div className="mt-4 w-full max-w-xs">
+            <p className="text-sm text-ink">{progress < 1 ? `Uploading… ${Math.round(progress * 100)}%` : "Scoring with the live engine…"}</p>
+            <div className="mt-3 h-1 rounded bg-deep">
+              <div className="h-1 rounded bg-signal transition-all" style={{ width: `${progress * 100}%` }} />
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="mt-4 text-[15px] font-medium text-ink">{drag ? "Drop to score this file" : "Drag a file here"}</p>
+            <p className="mt-1 text-sm text-muted">or</p>
+            <span className="btn btn-primary pointer-events-none mt-3">Choose a file</span>
+            <p className="mt-4 text-xs text-muted">.xlsx · .csv · .parquet · up to 400 MB · processed in memory, never stored</p>
+          </>
+        )}
       </div>
+      <input
+        ref={input}
+        type="file"
+        accept={ACCEPT}
+        className="sr-only"
+        tabIndex={-1}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onFile(f);
+          e.target.value = "";
+        }}
+      />
+
+      {lastUpload && progress === null && (
+        <p className="mt-3 flex items-center gap-2 text-sm text-ok">
+          <CheckCircle2 size={15} aria-hidden /> {lastUpload.name} scored · {plural(lastUpload.drives, "drive")}. Results are below.
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+        <a href="/api/demos/template" download className="inline-flex items-center gap-1.5 text-signal hover:underline">
+          <Download size={14} aria-hidden /> Download a template
+        </a>
+        <button type="button" onClick={() => setHelp((h) => !h)} aria-expanded={help} className="inline-flex items-center gap-1.5 text-soft hover:text-ink">
+          <HelpCircle size={14} aria-hidden /> What should the file contain?
+        </button>
+      </div>
+      {help && (
+        <div className="mt-4 space-y-2 rounded-lg border hairline bg-void/40 p-4 text-xs leading-relaxed text-soft">
+          <p>
+            <b className="text-ink">One row per drive per day.</b> Required columns: <code className="text-signal">date</code> and{" "}
+            <code className="text-signal">serial_number</code> (also accepted: time or timestamp, serial or drive_id).
+          </p>
+          <p>
+            <b className="text-ink">SMART attributes</b> as <code>smart_N_raw</code> columns, such as <code>smart_5_raw</code> and{" "}
+            <code>smart_197_raw</code>. The model reads 15; any that are missing are filled automatically, and the page says which.
+          </p>
+          <p>
+            <b className="text-ink">History:</b> 30 days per drive gives a full prediction. Drives with 10 to 29 days are still scored and marked as
+            partial. Optional columns: <code>model</code>, and <code>failure</code> (0/1) to check the ranking against what really happened.
+          </p>
+          <p className="text-muted">Collecting with smartctl? demo/from_smartctl/ has a daily collector that writes this format.</p>
+        </div>
+      )}
     </div>
   );
 }
+
+/** The other way in: a ready-made dataset, for anyone without a file at hand. */
+function SamplePicker({
+  demos,
+  selected,
+  busy,
+  onPick,
+}: {
+  demos: Async<DemoDataset[]>;
+  selected: string | null;
+  busy: boolean;
+  onPick: (d: DemoDataset) => void;
+}) {
+  const { data, error, loading, reload } = demos;
+  const quick = data?.filter((d) => d.group === "demo") ?? [];
+  const more = data?.filter((d) => d.group !== "demo") ?? [];
+  const moreSelected = more.find((d) => d.id === selected)?.id ?? "";
+
+  return (
+    <div className="panel flex flex-col">
+      <p className="kicker mb-1.5 text-[10px]">Option B · sample data</p>
+      <h3 className="text-lg font-semibold">No file at hand? Try a sample</h3>
+      <p className="mt-1 text-sm text-muted">Real drive telemetry, scored with one click.</p>
+      {loading && <Loading label="Listing datasets" className="mt-5" />}
+      {error && <ErrorState message={error} onRetry={reload} className="mt-5" />}
+      <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+        {quick.map((d) => {
+          const on = d.id === selected;
+          return (
+            <li key={d.id}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onPick(d)}
+                aria-pressed={on}
+                className={`h-full w-full rounded-lg border px-3 py-2.5 text-left transition disabled:opacity-60 ${
+                  on ? "border-signal/60 bg-signal/10" : "border-line hover:border-line-strong hover:bg-deep/60"
+                }`}
+              >
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className={`text-sm ${on ? "text-ink" : "text-soft"}`}>{d.label}</span>
+                  {on && <CheckCircle2 size={14} className="shrink-0 text-signal" aria-hidden />}
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-muted">{d.description}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {more.length > 0 && (
+        <label className="mt-4 block text-xs text-muted">
+          More datasets
+          <select
+            value={moreSelected}
+            disabled={busy}
+            onChange={(e) => {
+              const d = more.find((m) => m.id === e.target.value);
+              if (d) onPick(d);
+            }}
+            className="mt-1.5 block w-full rounded-lg border border-line bg-night px-3 py-2 text-sm text-ink"
+          >
+            <option value="">Real 90-day exports and test files…</option>
+            {GROUPS.filter((g) => g.id !== "demo").map((g) => (
+              <optgroup key={g.id} label={g.title}>
+                {more
+                  .filter((d) => d.group === g.id)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.label} ({plural(d.drives, "drive")})
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
+const HOW = [
+  { n: 1, t: "Choose data", d: "Upload a file or pick a sample" },
+  { n: 2, t: "See the ranking", d: "Every drive scored, riskiest first" },
+  { n: 3, t: "Open a drive", d: "Its trend and why it was flagged" },
+];
 
 // ---------------------------------------------------------------- ranked queue
 
@@ -318,6 +429,8 @@ export function DriveExplorer() {
   const [selected, setSelected] = useState<string | null>(null);
   const [last, setLast] = useState<{ kind: "demo"; d: DemoDataset } | { kind: "file"; f: File } | null>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const [lastUpload, setLastUpload] = useState<{ name: string; drives: number } | null>(null);
 
   const run = useCallback(async (src: { kind: "demo"; d: DemoDataset } | { kind: "file"; f: File }, models: EstimatorKind[]) => {
     setLast(src);
@@ -331,8 +444,14 @@ export function DriveExplorer() {
           : await api.predictFile(src.f, models, (f) => setPending((s) => (s ? { ...s, progress: f } : s)));
       setResult(p);
       setSelected(p.rows[0]?.serial ?? null);
+      if (src.kind === "file") {
+        setLastUpload({ name: src.f.name, drives: p.diagnostics.drives_scored });
+        // Someone who just uploaded wants to see the answer, not the upload card.
+        requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      }
     } catch (e) {
       setError((e as Error).message);
+      if (src.kind === "file") requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } finally {
       setPending(null);
     }
@@ -363,34 +482,64 @@ export function DriveExplorer() {
   const q = p?.quality?.[p.primary];
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
-      <aside className="panel min-w-0 lg:max-h-[1100px] lg:overflow-y-auto">
-        <DatasetPicker demos={demos} selected={datasetId} busy={!!pending} onPick={(d) => run({ kind: "demo", d }, kinds)} onFile={(f) => run({ kind: "file", f }, kinds)} />
-      </aside>
+    <div className="space-y-4">
+      <ol className="grid gap-2 sm:grid-cols-3" aria-label="How to use the demo">
+        {HOW.map((h) => (
+          <li key={h.n} className="flex items-center gap-3 rounded-xl border hairline bg-night/60 px-4 py-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-signal/50 text-xs font-semibold text-signal">
+              {h.n}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-ink">{h.t}</span>
+              <span className="block truncate text-xs text-muted">{h.d}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
 
-      <div className="panel min-w-0">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.1fr_1fr]">
+        <UploadCard
+          busy={!!pending}
+          progress={pending?.progress ?? null}
+          lastUpload={lastUpload}
+          onFile={(f) => run({ kind: "file", f }, kinds)}
+        />
+        <SamplePicker demos={demos} selected={datasetId} busy={!!pending} onPick={(d) => run({ kind: "demo", d }, kinds)} />
+      </div>
+
+      <div ref={resultsRef} className="panel min-w-0 scroll-mt-20">
         {/* toolbar */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b hairline pb-5">
           <div className="min-w-0">
-            <p className="flex items-center gap-2 truncate text-sm text-soft">
+            <p className="flex flex-wrap items-center gap-2 text-sm text-soft">
               <FileSpreadsheet size={14} className="shrink-0 text-muted" aria-hidden />
-              {pending ? pending.label : (p?.source ?? "No file scored yet")}
+              <span className="truncate">{pending ? pending.label : (p?.source ?? "No file scored yet")}</span>
+              {p && !pending && (
+                <span className={`rounded-full px-2 py-0.5 text-[11px] ${last?.kind === "file" ? "bg-signal/15 text-signal" : "bg-deep text-muted"}`}>
+                  {last?.kind === "file" ? "Your file" : "Sample data"}
+                </span>
+              )}
             </p>
             {p && !pending && (
               <p className="num mt-1 text-xs text-muted">
-                {fmtInt(p.diagnostics.drives_scored)} drives scored in {p.seconds}s · {p.summary[p.primary]?.inspect ?? 0} to inspect ·{" "}
+                {fmtInt(p.diagnostics.drives_scored)} drives scored in {p.seconds < 1 ? "under a second" : `${p.seconds}s`} · {p.summary[p.primary]?.inspect ?? 0} to inspect ·{" "}
                 {p.diagnostics.date_min} → {p.diagnostics.date_max}
               </p>
             )}
           </div>
+          <div className="flex flex-wrap items-center gap-4">
+          <a href="#upload" className="inline-flex items-center gap-1.5 rounded-full border border-signal/40 px-3 py-1.5 text-xs text-signal hover:bg-signal/10">
+            <Upload size={13} aria-hidden /> Upload {last?.kind === "file" ? "another" : "your own"} file
+          </a>
           <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
             <input type="checkbox" checked={kinds.includes("cnn")} onChange={toggleCnn} disabled={!!pending} className="accent-[#8b6cf0]" />
             Also run the CNN side by side
           </label>
+          </div>
         </div>
 
         <AnimatePresence>
-          {pending && (
+          {pending && pending.progress === null && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mb-6">
               <Loading label={pending.progress !== null && pending.progress < 1 ? `Uploading ${Math.round(pending.progress * 100)}%` : "Scoring with the live engine"} />
               {pending.progress !== null && (
@@ -459,6 +608,10 @@ export function DriveExplorer() {
               </div>
             )}
 
+            <p className="mb-3 text-xs text-muted">
+              Drives are ranked from highest to lowest risk. The tick on each bar is the model's inspect threshold. Select a drive to see why
+              it scored as it did.
+            </p>
             <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,320px)_1fr]">
               <Queue key={p.token} p={p} selected={selected} onSelect={pick} />
               <div ref={profileRef} className="min-w-0 scroll-mt-20">

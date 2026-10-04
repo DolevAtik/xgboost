@@ -9,7 +9,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
-import { DIST_DIR, FLASK_URL, HOST, MAX_UPLOAD_BYTES, MODELS_DIR, PORT } from "./config.ts";
+import { DEMO_DIR, DIST_DIR, FLASK_URL, HOST, MAX_UPLOAD_BYTES, MODELS_DIR, PORT } from "./config.ts";
 import { listDemos, predictDemo, signal } from "./demos.ts";
 import { evaluation } from "./evaluation.ts";
 import { ApiError, flask, pipeUpload } from "./flask.ts";
@@ -106,6 +106,11 @@ app.get("/api/evaluation", route(() => evaluation()));
 
 app.get("/api/demos", route(() => listDemos()));
 app.get("/api/demos/signal", route(() => signal()));
+
+/** The input schema with every column, for people preparing their own file. */
+app.get("/api/demos/template", (_req, res, next) => {
+  res.download(path.join(DEMO_DIR, "TEMPLATE.csv"), "drive_telemetry_template.csv", (err) => err && next(err));
+});
 
 app.post(
   "/api/demos/:id/predict",

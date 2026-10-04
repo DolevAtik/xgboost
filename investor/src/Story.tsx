@@ -10,7 +10,6 @@ const Signal = lazy(() => import("./sections/Signal"));
 const Intelligence = lazy(() => import("./sections/Intelligence"));
 const PerformanceMetrics = lazy(() => import("./sections/PerformanceMetrics"));
 const Product = lazy(() => import("./sections/Product"));
-const Trust = lazy(() => import("./sections/Trust"));
 const ClosingScene = lazy(() => import("./sections/ClosingScene"));
 
 /** A code-split chapter. The placeholder keeps the anchor id so links work while it loads. */
@@ -44,9 +43,6 @@ export function Story() {
         </Deferred>
         <Deferred id="product">
           <Product />
-        </Deferred>
-        <Deferred id="trust">
-          <Trust />
         </Deferred>
         <Deferred id="vision">
           <ClosingScene />

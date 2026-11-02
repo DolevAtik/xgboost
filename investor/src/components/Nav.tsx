@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, Languages, Menu, X } from "lucide-react";
-import { api } from "../lib/api";
+import { api, STATIC } from "../lib/api";
 import { openContact } from "../lib/contact";
 import { useLang, type Bi } from "../lib/i18n";
 import { useApi } from "../lib/useApi";
@@ -85,7 +85,11 @@ export function Nav() {
   }, []);
 
   const ok = health.data?.engine.ok;
-  const status = health.loading ? t("checking engine", "בודק מנוע") : ok ? t("Engine live", "המנוע פעיל") : t("Engine offline", "המנוע לא זמין");
+  const status = STATIC
+    ? t("Recorded results", "תוצאות מוקלטות")
+    : health.loading
+      ? t("checking engine", "בודק מנוע")
+      : ok ? t("Engine live", "המנוע פעיל") : t("Engine offline", "המנוע לא זמין");
 
   return (
     <header

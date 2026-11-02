@@ -21,7 +21,7 @@ function Portrait({ m }: { m: Member }) {
     <div className="relative aspect-square w-full overflow-hidden rounded-xl border hairline bg-gradient-to-br from-deep to-night">
       {!failed ? (
         <img
-          src={`/team/${m.photo}`}
+          src={`${import.meta.env.BASE_URL}team/${m.photo}`}
           alt={t(`Portrait of ${m.name}`, `תמונה של ${m.name}`)}
           loading="lazy"
           onError={() => setFailed(true)}

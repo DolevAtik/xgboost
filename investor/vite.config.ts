@@ -5,6 +5,8 @@ import tailwindcss from "@tailwindcss/vite";
 const API = process.env.API_URL ?? "http://127.0.0.1:4000";
 
 export default defineConfig({
+  // GitHub Pages serves the static build from /<repo>/; set VITE_BASE there.
+  base: process.env.VITE_BASE ?? "/",
   plugins: [react(), tailwindcss()],
   server: {
     host: "127.0.0.1",

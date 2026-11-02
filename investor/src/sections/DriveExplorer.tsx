@@ -7,7 +7,7 @@ import { RiskTrajectoryChart } from "../components/RiskTrajectoryChart";
 import { SHAPExplanation } from "../components/SHAPExplanation";
 import { ErrorState, Loading } from "../components/States";
 import { TechnicalDisclosure } from "../components/TechnicalDisclosure";
-import { api } from "../lib/api";
+import { api, TEMPLATE_URL } from "../lib/api";
 import { fmtInt, riskCategory, toneColor } from "../lib/format";
 import { EASE } from "../lib/motion";
 import { smartName, smartPlain } from "../lib/smart";
@@ -153,7 +153,7 @@ function UploadCard({
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-        <a href="/api/demos/template" download className="inline-flex items-center gap-1.5 text-signal hover:underline">
+        <a href={TEMPLATE_URL} download className="inline-flex items-center gap-1.5 text-signal hover:underline">
           <Download size={14} aria-hidden /> {t("Download a template", "הורדת תבנית")}
         </a>
         <button type="button" onClick={() => setHelp((h) => !h)} aria-expanded={help} className="inline-flex items-center gap-1.5 text-soft hover:text-ink">

@@ -7,6 +7,7 @@
     "dev": "concurrently -k -n engine,api,web -c yellow,cyan,magenta \"npm:engine\" \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/index.ts",
     "dev:web": "vite",
+    "snapshot": "tsx scripts/snapshot.ts",
     "engine": "cd .. && python webapp/app.py",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",

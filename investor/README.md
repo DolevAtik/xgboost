@@ -40,6 +40,21 @@ npm run serve        # engine + API; site at http://127.0.0.1:4000
 
 The original Flask console still works on its own at <http://127.0.0.1:5000>.
 
+## Online version (GitHub Pages)
+
+`.github/workflows/pages.yml` publishes a static build on every push to `main` that
+touches `investor/`. A static host can't run the engine, so that build (`VITE_STATIC=1`)
+reads every API response from `public/snapshot/`, which was recorded from the real engine.
+Every sample dataset, both models, and every drive's trajectory and explanation work the
+same as locally. Only uploading your own file needs the live stack.
+
+Re-record the snapshot after retraining or changing the demo files, then commit it:
+
+```bash
+npm run serve        # engine + API must be up
+npm run snapshot     # in a second terminal; rewrites public/snapshot/
+```
+
 ## Architecture
 
 ```

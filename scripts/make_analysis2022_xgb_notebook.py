@@ -56,6 +56,7 @@ same test drives and the same windows.
 | **4b** | when does the CNN start to overfit, and does its shape change that? | train-vs-validation divergence per variation, logged to `results/experiments_results.xlsx`, with the winner on a `Best Model` sheet |
 | **5** | does gradient boosting on window summaries beat the CNN? | XGBoost training, test metrics, **CNN vs XGBoost** table and curves |
 | **5b** | can a transformer beat the CNN? | five transformer variations under the CNN's protocol, then **CNN vs XGBoost vs transformer** on the same windows |
+| **5c** | what if the networks get XGBoost's data? | two transformers and a CNN control trained on all 10.5M tiling windows |
 | **6** | how far does a single tree get? | a depth ladder up to **depth 8**, train vs test |
 | **Summary** | which model is best? | all four models in one table, the winner by drive precision @100 and PR-AUC, and `results/model_comparison.xlsx` with every CNN, transformer and XGBoost run |
 
@@ -1018,6 +1019,50 @@ if RUN_TRANSFORMER:
         fig_dir=FIG_DIR, model_type="transformer")
 """)
 
+md(r"""
+### 5c — The same networks on XGBoost's data
+
+Every network above trained on `RandomWindows`: 4 random windows per drive per epoch,
+1.1M windows with failures pushed to 25%. XGBoost was fitted on **all 10.5M tiling
+windows** at the real ~0.24% failure rate. That is a difference in data, not in model, so
+this round gives the networks the same data. `ShuffledTilingWindows` serves every training
+window once per epoch, in a new random order each epoch; it shuffles blocks of 32
+consecutive windows of one drive, so each block is one sequential read from the store.
+
+| run | network | recipe |
+|---|---|---|
+| `tf_day_tiling` | day tokens + summary tokens, width 64 (the round-1 `tf_summary_width64`) | AdamW, warm-up + cosine decay, gradient clipping |
+| `tf_channel_tiling` | **one token per channel**, each holding that channel's 30 days (`ChannelTokenTransformer`): attention runs across SMART attributes instead of across days | the same |
+| `cnn_tiling` | the best round-1 CNN (`lr_3e-03`) — **the control** | its own: Adam, LR halved on a plateau |
+
+The control is what makes the result readable: if only the transformers got the extra
+data, a win could be the data rather than the architecture. Everything else is the round-1
+protocol — the same monitors, train probe, early stopping, overfitting rule and seed — and
+the runs are logged to the same workbook, so the cells below rank them with the round-1
+runs. The definitions live in `mc.TILING_RUNS`; `scripts/run_tiling_experiments.py` runs
+this round as a plain script.
+
+**Cost.** An epoch reads all 10.5M windows: about 12–30 minutes depending on the network
+and on how busy the GPU is, up to 10 epochs per run. Set `RUN_TILING=0` to skip training
+and report from the log.
+""")
+
+code(r"""
+RUN_TILING = os.environ.get("RUN_TILING", "1") == "1"
+TILING_BASE = dataclasses.replace(tcfg, max_epochs=10)
+for family, variations in mc.TILING_RUNS.items():
+    print(f"{family}:")
+    print(pd.DataFrame(variations).fillna("").to_string(index=False), "\n")
+
+if RUN_TILING:
+    for family, variations in mc.TILING_RUNS.items():
+        ox.run_variations(
+            variations, TILING_BASE, bundle, val_monitor, train_probe, test_monitor, device,
+            EXP_LOG, rule=RULE, es_kwargs={k: v for k, v in ES.items() if k != "patience"},
+            train_positive_ratio=float(best.train_positive_ratio), seed=SEED,
+            fig_dir=FIG_DIR, model_type=family, train_stream="tiling")
+""")
+
 code(r"""
 # CNN and transformer runs on the stride-30 windows every one of them was selected on.
 board = EXP_LOG.summary()
@@ -1314,13 +1359,14 @@ print("\nwrote results/w2022x_model_summary.csv")
 """)
 
 md(r"""
-### The comparison workbook: every CNN variation, every transformer, XGBoost
+### The comparison workbook: every transformer, XGBoost and the best CNN
 
-The table above holds one model per family. `results/model_comparison.xlsx` holds them
-**all** — each of the CNN variations from §4b, each transformer from §5b, XGBoost and the
-tree — scored on these same tiling test windows, each with its threshold tuned on the
-tiling validation windows. A family's winner is its run with the best **validation**
-PR-AUC.
+The table above holds one model per family. `results/model_comparison.xlsx` holds **every
+transformer** from §5b and §5c, XGBoost, and the **best CNN** — scored on these same
+tiling test windows, each with its threshold tuned on the tiling validation windows. The
+best CNN is the CNN run (from §4b and §5c) with the highest **validation** PR-AUC; every
+model scored here, the other CNNs and the tree included, is also saved to
+`results/w2022x_tiling_comparison.csv`.
 
 | sheet | contents |
 |---|---|
@@ -1328,7 +1374,7 @@ PR-AUC.
 | `Head_to_Head` | every model ranked by drive precision @100 then PR-AUC, best per column in green, bar charts |
 | `Family_Winners` | one model per family, chosen on validation, with charts |
 | `PrecisionAtK` | drive and window Precision@K for every model, with line charts |
-| `Stride30_Leaderboard` | every CNN and transformer run on the windows it was selected on |
+| `Stride30_Leaderboard` | the transformers and the best CNN on the windows they were selected on |
 | `Training`, `Epoch_History` | how each run trained, and validation PR-AUC per epoch |
 
 Scoring a network on the 4.9M tiling validation + test windows takes about a minute, so
@@ -1391,11 +1437,14 @@ and the day-by-day shape adds little. If the CNN wins, the order of events insid
 window carries information the summaries throw away. Read the drive-level Precision@K
 rows first — that is the decision an operator makes — and PR-AUC second.
 
-**The transformer is the CNN's protocol with a different network.** Same training
-stream, same monitors, same stopping rules, same seed — so its gap to the CNN is the
-architecture, and its gap to `tf_plain` is the summary tokens. Its gap to XGBoost is
-partly the training data too: XGBoost fits every one of the 10.5M tiling training windows,
-the networks see 1.1M resampled windows per epoch.
+**Each transformer comparison changes one thing.** In §5b the transformers share the
+CNN's training stream, monitors, stopping rules and seed, so a gap to the CNN is the
+architecture and a gap to `tf_plain` is the summary tokens. In §5c every network moves to
+XGBoost's data — all 10.5M tiling windows — with `cnn_tiling` as the control, so a gap
+between `tf_day_tiling` and `cnn_tiling` is again the architecture, and a gap between
+`tf_summary_width64` and `tf_day_tiling` (the same network) is the data and the recipe.
+When this was run, the data mattered most: on the round-1 stream no transformer beat
+the CNN; on the full data `tf_day_tiling` beat `cnn_tiling` on PR-AUC, F1 and precision.
 
 **One tree is not enough, and accuracy cannot tell you so.** At a 0.2% base rate the
 depth-8 tree's accuracy is near-perfect on train and test alike while its ranking is far

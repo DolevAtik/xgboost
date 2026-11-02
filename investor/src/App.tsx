@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { MotionConfig } from "framer-motion";
 import { DataProvider } from "./lib/data";
+import { LangProvider } from "./lib/i18n";
 import { Lab } from "./lab/Lab";
 import { Story } from "./Story";
 
@@ -29,7 +30,9 @@ export default function App() {
   const route = useLabRoute();
   return (
     <MotionConfig reducedMotion="user">
-      <DataProvider>{route.lab ? <Lab id={route.id} /> : <Story />}</DataProvider>
+      <LangProvider>
+        <DataProvider>{route.lab ? <Lab id={route.id} /> : <Story />}</DataProvider>
+      </LangProvider>
     </MotionConfig>
   );
 }

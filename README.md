@@ -103,7 +103,7 @@ loads.
 
 - **Model card** — both estimators side by side with their held-out metrics, the
   precision@K ladder, XGBoost's gain ranking, the leakage audit's per-channel AUCs, and
-  the depth-123 decision tree that memorised its training set, as the argument for an
+  a single decision tree's train vs held-out balanced accuracy, as the argument for an
   ensemble.
 - **Upload feedback** — a real progress bar while the bytes move (a 31 MB workbook is
   not instant), then a toast naming the file and what happened to it: drives scored,

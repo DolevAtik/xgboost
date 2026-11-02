@@ -8,6 +8,7 @@ import { fmtCompact, fmtInt } from "../lib/format";
 import { EASE, hasWebGL, useIsCompact } from "../lib/motion";
 import { smartName } from "../lib/smart";
 import { useApi } from "../lib/useApi";
+import { useLang } from "../lib/i18n";
 
 const HeroScene = lazy(() => import("../scenes/HeroScene"));
 
@@ -39,9 +40,10 @@ const SPARK_ATTRS = ["smart_197_raw", "smart_198_raw", "smart_9_raw", "smart_194
 
 /** Real telemetry of the failing demo drive, as small multiples beside the 3D drive. */
 function TelemetryCard({ s }: { s: SignalSeries }) {
+  const { t, lang } = useLang();
   return (
     <div className="glass w-60 rounded-xl p-4">
-      <p className="text-[11px] text-muted">Last 30 days · demo drive</p>
+      <p className="text-[11px] text-muted">{t("Last 30 days · demo drive", "30 הימים האחרונים · כונן לדוגמה")}</p>
       <p className="num mb-3 truncate text-xs text-soft">{s.serial}</p>
       <ul className="space-y-2">
         {SPARK_ATTRS.map((a) => {
@@ -50,7 +52,7 @@ function TelemetryCard({ s }: { s: SignalSeries }) {
           const rising = (v.at(-1) ?? 0) > (v[0] ?? 0) && (a === "smart_197_raw" || a === "smart_198_raw");
           return (
             <li key={a} className="flex items-center justify-between gap-3">
-              <span className="truncate text-[11px] text-muted">{smartName(a)}</span>
+              <span className="truncate text-[11px] text-muted">{smartName(a, lang)}</span>
               <Spark values={v} tone={rising ? "var(--color-risk)" : moved ? "var(--color-signal)" : "var(--color-faint)"} />
             </li>
           );
@@ -64,12 +66,21 @@ function StatsStrip() {
   const { evaluation } = useStoryData();
   const e = evaluation.data;
   const xgb = e?.models.find((m) => m.model === "XGBoost");
+  const { t } = useLang();
   const items = [
-    { icon: <HardDrive size={22} />, v: e ? fmtInt(e.scale.drives) : "—", l: "Drives analysed" },
-    { icon: <CalendarDays size={22} />, v: e ? `${fmtCompact(e.scale.driveDays)}+` : "—", l: "Drive-days of telemetry" },
-    { icon: <BarChart3 size={22} />, v: xgb ? `${xgb.hitsAt100} / 100` : "—", l: "Top-100 precision (test)", hint: "Of the 100 held-out test drives ranked riskiest, how many really failed within 30 days." },
-    { icon: <Clock size={22} />, v: "30 days", l: "Prediction horizon" },
-    { icon: <Database size={22} />, v: e ? `${e.scale.quarters.length} quarters` : "—", l: "Real-world fleet data" },
+    { icon: <HardDrive size={22} />, v: e ? fmtInt(e.scale.drives) : "—", l: t("Drives analysed", "כוננים שנותחו") },
+    { icon: <CalendarDays size={22} />, v: e ? `${fmtCompact(e.scale.driveDays)}+` : "—", l: t("Drive-days of telemetry", "ימי ניטור של כוננים") },
+    {
+      icon: <BarChart3 size={22} />,
+      v: xgb ? `${xgb.hitsAt100} / 100` : "—",
+      l: t("Top-100 precision (test)", "דיוק ב־100 המובילים (מבחן)"),
+      hint: t(
+        "Of the 100 held-out test drives ranked riskiest, how many really failed within 30 days.",
+        "מתוך 100 כונני המבחן שדורגו כמסוכנים ביותר, כמה באמת התקלקלו תוך 30 יום.",
+      ),
+    },
+    { icon: <Clock size={22} />, v: t("30 days", "30 יום"), l: t("Prediction horizon", "טווח החיזוי") },
+    { icon: <Database size={22} />, v: e ? t(`${e.scale.quarters.length} quarters`, `${e.scale.quarters.length} רבעונים`) : "—", l: t("Real-world fleet data", "נתונים אמיתיים מצי כוננים") },
   ];
   return (
     <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border hairline bg-line sm:grid-cols-3 lg:grid-cols-5">
@@ -79,7 +90,9 @@ function StatsStrip() {
             {it.icon}
           </span>
           <div className="min-w-0">
-            <dd className="text-xl font-semibold tabular-nums tracking-tight text-ink">{it.v}</dd>
+            <dd className="text-xl font-semibold tabular-nums tracking-tight text-ink">
+              <span dir="ltr" className="inline-block">{it.v}</span>
+            </dd>
             <dt className="truncate text-xs text-muted">{it.l}</dt>
           </div>
         </div>
@@ -98,6 +111,7 @@ export function Hero() {
   const pending = failing?.series.smart_197_raw ?? [];
   const pendingFrom = pending.find((v) => v !== null) ?? 0;
   const pendingTo = [...pending].reverse().find((v) => v !== null) ?? 0;
+  const { t: tr, he } = useLang();
 
   const t = (d: number) =>
     reduce ? {} : { initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.8, ease: EASE, delay: d } };
@@ -109,26 +123,36 @@ export function Hero() {
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <div>
             <motion.p {...t(0.05)} className="kicker mb-5">
-              Predictive maintenance for data infrastructure
+              {tr("Predictive maintenance for data infrastructure", "תחזוקה חזויה לתשתיות מידע")}
             </motion.p>
             <motion.h1 {...t(0.12)} id="hook-title" className="text-[clamp(2.6rem,5.4vw,4.5rem)] font-semibold leading-[1.02] tracking-[-0.03em]">
-              Know the failure <span className="text-signal">before</span> it happens.
+              {he ? (
+                <>
+                  לדעת על התקלה <span className="text-signal">לפני</span> שהיא קורית.
+                </>
+              ) : (
+                <>
+                  Know the failure <span className="text-signal">before</span> it happens.
+                </>
+              )}
             </motion.h1>
             <motion.p {...t(0.2)} className="mt-6 max-w-xl text-base leading-relaxed text-soft md:text-lg">
-              We read the health telemetry hard drives already report every day, and rank which drives are most likely to fail within the next 30
-              days, turning reactive maintenance into planned action.
+              {tr(
+                "We read the health telemetry hard drives already report every day, and rank which drives are most likely to fail within the next 30 days, turning reactive maintenance into planned action.",
+                "אנחנו קוראים את נתוני הבריאות שכוננים קשיחים כבר מדווחים בכל יום, ומדרגים אילו כוננים צפויים להתקלקל ב־30 הימים הקרובים. כך תחזוקה שמגיבה לתקלות הופכת לעבודה מתוכננת מראש.",
+              )}
             </motion.p>
             <motion.div {...t(0.28)} className="mt-8 flex flex-wrap items-center gap-3">
               <a href="#intelligence" className="btn btn-ghost">
-                Explore the technology <ArrowRight size={15} aria-hidden />
+                {tr("Explore the technology", "איך זה עובד")} <ArrowRight size={15} aria-hidden className="rtl:rotate-180" />
               </a>
               <a href="#product" className="btn btn-primary">
-                <Play size={14} aria-hidden /> Try the live demo
+                <Play size={14} aria-hidden className="rtl:rotate-180" /> {tr("Try the live demo", "נסו את ההדגמה")}
               </a>
             </motion.div>
           </div>
 
-          <motion.div {...t(0.15)} className="relative h-[340px] sm:h-[420px] lg:h-[480px]">
+          <motion.div {...t(0.15)} dir="ltr" className="relative h-[340px] sm:h-[420px] lg:h-[480px]">
             {webgl ? (
               <Suspense fallback={<StaticBackdrop />}>
                 <HeroScene animate={!reduce} compact={compact} />
@@ -141,14 +165,21 @@ export function Hero() {
                 <div className="absolute left-0 top-4 flex items-center gap-2.5 rounded-lg border border-warn/50 bg-void/70 px-3 py-2 backdrop-blur sm:left-4">
                   <AlertTriangle size={16} className="text-warn" aria-hidden />
                   <div className="leading-tight">
-                    <p className="text-[11px] text-warn">Pending sectors rising</p>
-                    <p className="num text-xs text-ink">
-                      {pendingFrom} → {pendingTo} in 30 days
+                    <p className="text-[11px] text-warn" dir={he ? "rtl" : "ltr"}>
+                      {tr("Pending sectors rising", "סקטורים ממתינים במגמת עלייה")}
+                    </p>
+                    <p className="num text-xs text-ink" dir={he ? "rtl" : "ltr"}>
+                      <span dir="ltr" className="inline-block">
+                        {pendingFrom} → {pendingTo}
+                      </span>{" "}
+                      {tr("in 30 days", "ב־30 יום")}
                     </p>
                   </div>
                 </div>
                 <div className="absolute right-0 top-4 hidden xl:block">
-                  <TelemetryCard s={failing} />
+                  <div dir={he ? "rtl" : "ltr"}>
+                    <TelemetryCard s={failing} />
+                  </div>
                 </div>
               </>
             )}

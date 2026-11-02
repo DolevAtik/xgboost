@@ -1,12 +1,14 @@
 import { useId, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Plus } from "lucide-react";
+import { useLang } from "../lib/i18n";
 import { EASE } from "../lib/motion";
 
 /** Optional depth for the technical reader. Closed by default; the story reads without it. */
 export function TechnicalDisclosure({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
   const [open, setOpen] = useState(false);
   const id = useId();
+  const { t } = useLang();
   return (
     <div className={`border-t hairline ${className}`}>
       <button
@@ -14,10 +16,10 @@ export function TechnicalDisclosure({ title, children, className = "" }: { title
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}
-        className="group flex w-full items-center justify-between gap-4 py-4 text-left"
+        className="group flex w-full items-center justify-between gap-4 py-4 text-start"
       >
         <span className="flex items-center gap-3">
-          <span className="kicker text-[10px] text-faint">Technical</span>
+          <span className="kicker text-[10px] text-faint">{t("Technical", "טכני")}</span>
           <span className="text-sm text-soft transition group-hover:text-ink">{title}</span>
         </span>
         <Plus aria-hidden size={16} className={`shrink-0 text-muted transition-transform duration-300 ${open ? "rotate-45" : ""}`} />

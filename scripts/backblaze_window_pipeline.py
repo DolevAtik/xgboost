@@ -160,6 +160,17 @@ class TrainConfig:
     # receptive field. Defaults reproduce the original five-block 1-16 stack.
     dilations: tuple[int, ...] = (1, 2, 4, 8, 16)
     kernel_size: int = 3
+    # Transformer depth and attention heads; the CNN and GRU ignore them.
+    n_layers: int = 2
+    n_heads: int = 4
+    # Optimiser recipe (overfit_experiments.train_with_diagnostics). The defaults are the
+    # CNN's: Adam, LR halved on a validation plateau. "adamw" + "warmup_cosine" is the
+    # usual transformer recipe: linear warm-up over `warmup_epochs`, then cosine decay to
+    # 5% of `lr` by `max_epochs`, stepped every batch. `grad_clip` 0 means off.
+    optimizer: str = "adam"              # adam | adamw
+    schedule: str = "plateau"            # plateau | warmup_cosine
+    warmup_epochs: float = 0.5
+    grad_clip: float = 0.0
     batch_size: int = 256
     lr: float = 1e-3
     weight_decay: float = 1e-5
@@ -1482,10 +1493,112 @@ class TransformerWindowClassifier(nn.Module):
         return self.head(pooled)
 
 
+class SummaryTokenTransformer(nn.Module):
+    """Transformer over the daily tokens plus three window-summary tokens and a [CLS].
+
+    The sequence the encoder attends over is
+
+        [CLS] [LAST] [MEAN] [DELTA] day_1 ... day_T
+
+    Each day is one token, as in `TransformerWindowClassifier`. The three summary tokens
+    are the window's last day, its mean and its first-to-last change, each projected by
+    its own linear layer -- the exact 3 x channels view XGBoost reads. Every day token
+    can attend to them and they to every day, so the model starts from the summary that
+    already ranks well and uses attention over the days for what the summary misses
+    (when in the window a counter jumped, whether it is still climbing).
+
+    The head reads the [CLS] token and the final day's token: [CLS] carries the pooled
+    view, the final day the drive's most recent state, which is the one an operator acts
+    on. Pre-norm layers, so it trains at the CNN's learning rate without warm-up.
+    """
+
+    N_SUMMARY = 3
+
+    def __init__(self, num_features: int, window_days: int = 30, hidden_dim: int = 128,
+                 dropout: float = 0.1, n_heads: int = 4, n_layers: int = 3):
+        super().__init__()
+        self.day_proj = nn.Linear(num_features, hidden_dim)
+        self.summary_proj = nn.ModuleList(nn.Linear(num_features, hidden_dim)
+                                          for _ in range(self.N_SUMMARY))
+        self.cls = nn.Parameter(torch.zeros(1, 1, hidden_dim))
+        # One position per token: [CLS], the summaries, then the days.
+        self.pos = nn.Parameter(torch.zeros(1, 1 + self.N_SUMMARY + window_days,
+                                            hidden_dim))
+        nn.init.trunc_normal_(self.cls, std=0.02)
+        nn.init.trunc_normal_(self.pos, std=0.02)
+        self.in_drop = nn.Dropout(dropout)
+        layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim, nhead=n_heads, dim_feedforward=4 * hidden_dim,
+            dropout=dropout, batch_first=True, norm_first=True, activation="gelu",
+        )
+        self.encoder = nn.TransformerEncoder(layer, num_layers=n_layers,
+                                             enable_nested_tensor=False)
+        self.norm = nn.LayerNorm(hidden_dim)
+        self.head = nn.Sequential(
+            nn.Linear(2 * hidden_dim, hidden_dim), nn.GELU(),
+            nn.Dropout(dropout), nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, x):                      # x: (B, T, F)
+        summaries = (x[:, -1, :], x.mean(dim=1), x[:, -1, :] - x[:, 0, :])
+        tokens = torch.cat(
+            [self.cls.expand(x.size(0), -1, -1)]
+            + [p(s).unsqueeze(1) for p, s in zip(self.summary_proj, summaries)]
+            + [self.day_proj(x)], dim=1)
+        h = self.norm(self.encoder(self.in_drop(tokens + self.pos)))
+        return self.head(torch.cat([h[:, 0, :], h[:, -1, :]], dim=1))
+
+
+class ChannelTokenTransformer(nn.Module):
+    """One token per channel (iTransformer-style), not one per day.
+
+    Each of the F channels -- a SMART level, one of its deltas, or the observed mask --
+    becomes a token that holds that channel's whole T-day series, embedded by a small
+    MLP. Attention then runs *across channels*: it learns how attributes move together
+    (reallocated sectors with pending sectors, a delta against its level), which is the
+    per-attribute view that makes XGBoost strong, instead of across 30 days whose order
+    adds little. The embedding is a function of the whole series, so last value, mean and
+    first-to-last change are all directly available to it.
+
+    A learned channel embedding tells the tokens apart (attention itself is order-free);
+    the head reads a [CLS] token and the mean of the channel tokens.
+    """
+
+    def __init__(self, num_features: int, window_days: int = 30, hidden_dim: int = 128,
+                 dropout: float = 0.1, n_heads: int = 4, n_layers: int = 3):
+        super().__init__()
+        self.series_proj = nn.Sequential(
+            nn.Linear(window_days, hidden_dim), nn.GELU(), nn.Linear(hidden_dim, hidden_dim))
+        self.channel_emb = nn.Parameter(torch.zeros(1, num_features, hidden_dim))
+        self.cls = nn.Parameter(torch.zeros(1, 1, hidden_dim))
+        nn.init.trunc_normal_(self.channel_emb, std=0.02)
+        nn.init.trunc_normal_(self.cls, std=0.02)
+        self.in_drop = nn.Dropout(dropout)
+        layer = nn.TransformerEncoderLayer(
+            d_model=hidden_dim, nhead=n_heads, dim_feedforward=4 * hidden_dim,
+            dropout=dropout, batch_first=True, norm_first=True, activation="gelu",
+        )
+        self.encoder = nn.TransformerEncoder(layer, num_layers=n_layers,
+                                             enable_nested_tensor=False)
+        self.norm = nn.LayerNorm(hidden_dim)
+        self.head = nn.Sequential(
+            nn.Linear(2 * hidden_dim, hidden_dim), nn.GELU(),
+            nn.Dropout(dropout), nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, x):                      # x: (B, T, F)
+        tokens = self.series_proj(x.transpose(1, 2)) + self.channel_emb   # (B, F, d)
+        tokens = torch.cat([self.cls.expand(x.size(0), -1, -1), tokens], dim=1)
+        h = self.norm(self.encoder(self.in_drop(tokens)))
+        return self.head(torch.cat([h[:, 0, :], h[:, 1:, :].mean(dim=1)], dim=1))
+
+
 ARCHITECTURES = {
     "cnn": CNN1DWindowClassifier,
     "gru": GRUWindowClassifier,
     "transformer": TransformerWindowClassifier,
+    "summary_transformer": SummaryTokenTransformer,
+    "channel_transformer": ChannelTokenTransformer,
 }
 
 
@@ -1495,9 +1608,12 @@ def build_model(num_features: int, window_days: int, tcfg: TrainConfig) -> nn.Mo
     kwargs = dict(num_features=num_features, window_days=window_days,
                   hidden_dim=tcfg.hidden_dim, dropout=tcfg.dropout)
     if tcfg.arch == "cnn":
-        # Only the CNN has a dilation stack; the GRU and transformer ignore it.
+        # Only the CNN has a dilation stack; the GRU and transformers ignore it.
         kwargs["dilations"] = tuple(tcfg.dilations)
         kwargs["kernel_size"] = int(tcfg.kernel_size)
+    elif tcfg.arch in ("transformer", "summary_transformer", "channel_transformer"):
+        kwargs["n_layers"] = int(tcfg.n_layers)
+        kwargs["n_heads"] = int(tcfg.n_heads)
     return ARCHITECTURES[tcfg.arch](**kwargs)
 
 

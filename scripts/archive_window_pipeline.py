@@ -1845,6 +1845,44 @@ class TilingWindows(Dataset):
                 f"({pos:,} positive windows) | {len(self):,} batches")
 
 
+class ShuffledTilingWindows(TilingWindows):
+    """Every tiling window of `drives`, once per epoch, in a fresh random order.
+
+    A training stream over the same 10.5M windows XGBoost is fitted on, rather than
+    `RandomWindows`' 4 draws per drive. Nothing is resampled: positives arrive at their
+    natural rate (~0.24%), as they do for XGBoost.
+
+    The shuffle is over **blocks** of `block` consecutive window ids -- consecutive tiles
+    of one drive, which sit next to each other in the memory-mapped matrix -- so a block
+    is one sequential read instead of `block` scattered ones. Window-level shuffling
+    reads at ~460 ms per 4,096-window batch from the 84 GB store; a batch here still
+    mixes `batch_size / block` random drives. `block=1` is a plain window shuffle.
+    """
+
+    def __init__(self, store: ArchiveSeriesStore, drives: np.ndarray,
+                 batch_size: int = 4096, seed: int = 42, block: int = 32,
+                 split_name: str = "train"):
+        super().__init__(store, drives, batch_size=batch_size, split_name=split_name)
+        self.seed = int(seed)
+        self.block = max(1, int(block))
+        self.set_epoch(0)
+
+    def set_epoch(self, epoch: int) -> None:
+        rng = np.random.default_rng([self.seed, int(epoch), 1])
+        n_blocks = (self.n_windows + self.block - 1) // self.block
+        starts = rng.permutation(n_blocks) * self.block
+        ids = (starts[:, None] + np.arange(self.block)[None, :]).ravel()
+        self._perm = ids[ids < self.n_windows]
+
+    def __getitem__(self, b: int):
+        lo = b * self.batch_size
+        ids = np.sort(self._perm[lo: lo + self.batch_size])
+        g, s = self.locate(ids)
+        x = torch.from_numpy(self.store.gather(g, s))
+        y = torch.from_numpy(self.labels[ids].astype(np.float32)).unsqueeze(1)
+        return x, y, torch.from_numpy(g.astype(np.int32))
+
+
 # ---------------------------------------------------------------------------
 # 13. Per-window verdicts for the test phase
 # ---------------------------------------------------------------------------
@@ -2066,7 +2104,7 @@ def count_label_conflicts(X: np.ndarray, y: np.ndarray,
 
 def grow_tree_to_full_accuracy(X_tr, y_tr, X_te, y_te, depths=None,
                                max_depth_cap: int = 200, seed: int = 42,
-                               verbose: bool = True):
+                               unbounded: bool = True, verbose: bool = True):
     """Deepen a decision tree until it classifies its training set perfectly.
 
     The tree is grown in depth steps and every step is reported, because the gap between
@@ -2075,6 +2113,10 @@ def grow_tree_to_full_accuracy(X_tr, y_tr, X_te, y_te, depths=None,
     per sample -- and that number says nothing about a disk it has not seen. The final
     unbounded fit is what "as big as needed for 100%" asks for; the test column next to
     it is what that costs.
+
+    `unbounded=False` stops at the last entry of `depths` instead, and that tree is the
+    one returned. The unbounded fit is by far the slowest step (about an hour on the
+    10.5M-row 2022 table), so skip it once its lesson is known.
 
     Accuracy is also the wrong lens at this base rate: predicting "never fails" for every
     window scores about 99.9%. Balanced accuracy is reported alongside for that reason.
@@ -2085,7 +2127,7 @@ def grow_tree_to_full_accuracy(X_tr, y_tr, X_te, y_te, depths=None,
     rows = []
     depths = depths or [2, 4, 6, 8, 12, 16, 24, 32]
     best = None
-    for d in list(depths) + [None]:
+    for d in list(depths) + ([None] if unbounded else []):
         t0 = time.time()
         clf = DecisionTreeClassifier(max_depth=d, random_state=seed,
                                      min_samples_leaf=1, min_samples_split=2)

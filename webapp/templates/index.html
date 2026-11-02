@@ -422,12 +422,12 @@ function modelDetails() {
   if (RUN.tree_baseline) {
     const tb = RUN.tree_baseline;
     bits.push(`<details><summary>Why boosting, and not one big tree</summary>
-      <p class="note" style="margin-top:0">A single decision tree grown until it could not
-      fit the training set any better reached depth ${num(tb.actual_depth)} with
-      ${num(tb.leaves)} leaves and ${fmt(tb.train_accuracy,5)} training accuracy — and
-      ${fmt(tb.test_balanced_acc,3)} balanced accuracy on held-out data. It memorised the
-      training set rather than learning anything transferable. That gap is the argument
-      for an ensemble of shallow trees.</p></details>`);
+      <p class="note" style="margin-top:0">A single decision tree of depth
+      ${num(tb.actual_depth)} with ${num(tb.leaves)} leaves, fitted on the same windows,
+      reached ${fmt(tb.train_balanced_acc,3)} balanced accuracy on its training set and
+      ${fmt(tb.test_balanced_acc,3)} on held-out data. One tree either stays too coarse to
+      rank drives well or, grown deeper, fits the training drives rather than failure.
+      That is the argument for an ensemble of shallow trees.</p></details>`);
   }
 
   bits.push(`<details><summary>The ${RUN.attributes.length} attributes this run reads</summary>

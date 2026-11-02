@@ -18,10 +18,15 @@ export type Tone = "risk" | "warn" | "ok";
  * "inspect", below it "hold". The page splits "inspect" once more at 0.5 so a 0.25 and a
  * 0.99 do not read the same; that split is presentation, and the UI says so.
  */
-export function riskCategory(score: number, threshold: number): { label: string; call: string; tone: Tone } {
-  if (score >= Math.max(0.5, threshold)) return { label: "High risk", call: "inspect", tone: "risk" };
-  if (score >= threshold) return { label: "Elevated", call: "inspect", tone: "warn" };
-  return { label: "Low risk", call: "hold", tone: "ok" };
+export function riskCategory(
+  score: number,
+  threshold: number,
+  lang: "en" | "he" = "en",
+): { label: string; call: string; tone: Tone } {
+  const he = lang === "he";
+  if (score >= Math.max(0.5, threshold)) return { label: he ? "סיכון גבוה" : "High risk", call: he ? "לבדיקה" : "inspect", tone: "risk" };
+  if (score >= threshold) return { label: he ? "סיכון מוגבר" : "Elevated", call: he ? "לבדיקה" : "inspect", tone: "warn" };
+  return { label: he ? "סיכון נמוך" : "Low risk", call: he ? "תקין" : "hold", tone: "ok" };
 }
 
 export const toneColor: Record<Tone, string> = {

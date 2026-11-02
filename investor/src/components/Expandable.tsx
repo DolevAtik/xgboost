@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
+import { useLang } from "../lib/i18n";
 import { EASE } from "../lib/motion";
 
 /**
@@ -10,6 +11,7 @@ import { EASE } from "../lib/motion";
 export function Expandable({ title, hint, children, className = "" }: { title: string; hint: string; children: ReactNode; className?: string }) {
   const [open, setOpen] = useState(false);
   const id = useId();
+  const { t } = useLang();
   return (
     <div className={className}>
       <button
@@ -17,17 +19,17 @@ export function Expandable({ title, hint, children, className = "" }: { title: s
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}
-        className={`group flex w-full items-center justify-between gap-4 rounded-xl border px-5 py-4 text-left transition ${
+        className={`group flex w-full items-center justify-between gap-4 rounded-xl border px-5 py-4 text-start transition ${
           open ? "border-signal/40 bg-signal/[0.05]" : "border-line bg-night/60 hover:border-line-strong hover:bg-deep/50"
         }`}
       >
         <span className="min-w-0">
-          <span className="kicker mb-1 block text-[10px]">Go deeper</span>
+          <span className="kicker mb-1 block text-[10px]">{t("Go deeper", "להעמקה")}</span>
           <span className="block text-[15px] font-medium text-ink">{title}</span>
           <span className="mt-0.5 block text-sm text-muted">{hint}</span>
         </span>
         <span className="flex shrink-0 items-center gap-2 text-xs text-muted group-hover:text-soft">
-          {open ? "Hide" : "Show"}
+          {open ? t("Hide", "הסתר") : t("Show", "הצג")}
           <ChevronDown size={16} aria-hidden className={`transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
         </span>
       </button>

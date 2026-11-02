@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useInView, useReducedMotion } from "framer-motion";
 import { Pause, Play, RotateCcw } from "lucide-react";
+import { useLang, type Bi } from "../lib/i18n";
 
 const COLS = 16;
 const ROWS = 6;
@@ -30,24 +31,33 @@ const STYLE: Record<CellState, string> = {
   offline: "bg-[#05070c] ring-1 ring-risk/40",
 };
 
-const LABEL: Record<CellState, string> = {
-  ok: "healthy",
-  pulse: "healthy, reporting telemetry",
-  flagged: "flagged for inspection",
-  serviced: "replaced in a planned window",
-  failed: "failed",
-  offline: "offline (outage)",
+const LABEL: Record<CellState, Bi> = {
+  ok: { en: "healthy", he: "תקין" },
+  pulse: { en: "healthy, reporting telemetry", he: "תקין, מדווח נתונים" },
+  flagged: { en: "flagged for inspection", he: "סומן לבדיקה" },
+  serviced: { en: "replaced in a planned window", he: "הוחלף בתחזוקה מתוכננת" },
+  failed: { en: "failed", he: "התקלקל" },
+  offline: { en: "offline (outage)", he: "מושבת (השבתה)" },
 };
 
 const LEGEND: CellState[] = ["ok", "flagged", "serviced", "failed", "offline"];
 
 type Tone = "risk" | "warn" | "signal" | "muted";
+type LogKind = "flagged" | "outage" | "planned" | "missed" | "online";
 interface LogLine {
   id: number;
   at: number;
-  text: string;
-  tone: Tone;
+  drive: string;
+  kind: LogKind;
 }
+
+const LOG_TEXT: Record<LogKind, { en: string; he: string; tone: Tone }> = {
+  flagged: { en: "flagged · inspection scheduled", he: "סומן · נקבעה בדיקה", tone: "warn" },
+  outage: { en: "failed · unplanned outage", he: "התקלקל · השבתה לא מתוכננת", tone: "risk" },
+  planned: { en: "replaced in planned window · no outage", he: "הוחלף בתחזוקה מתוכננת · בלי השבתה", tone: "signal" },
+  missed: { en: "failed · not flagged in time", he: "התקלקל · לא סומן בזמן", tone: "risk" },
+  online: { en: "back online after replacement", he: "חזר לפעולה אחרי החלפה", tone: "muted" },
+};
 
 interface WearEvent {
   cell: number;
@@ -118,28 +128,28 @@ function step(sim: Sim, dt: number, catchRate: number) {
   }
 
   const crossed = (e: WearEvent, at: number) => prev < e.t0 + at && e.t0 + at <= now;
-  const log = (list: LogLine[], text: string, tone: Tone, at: number) => {
-    list.unshift({ id: sim.seq++, at, text, tone });
+  const log = (list: LogLine[], drive: string, kind: LogKind, at: number) => {
+    list.unshift({ id: sim.seq++, at, drive, kind });
     list.length = Math.min(list.length, LOG_SIZE);
   };
 
   for (const e of sim.events) {
     const id = driveId(e.cell);
-    if (e.caught && crossed(e, FLAG_AT)) log(sim.logPredictive, `${id} flagged · inspection scheduled`, "warn", e.t0 + FLAG_AT);
+    if (e.caught && crossed(e, FLAG_AT)) log(sim.logPredictive, id, "flagged", e.t0 + FLAG_AT);
     if (crossed(e, FAIL_AT)) {
       sim.counts.reactiveOutages++;
-      log(sim.logReactive, `${id} failed · unplanned outage`, "risk", e.t0 + FAIL_AT);
+      log(sim.logReactive, id, "outage", e.t0 + FAIL_AT);
       if (e.caught) {
         sim.counts.planned++;
-        log(sim.logPredictive, `${id} replaced in planned window · no outage`, "signal", e.t0 + FAIL_AT);
+        log(sim.logPredictive, id, "planned", e.t0 + FAIL_AT);
       } else {
         sim.counts.predictiveOutages++;
-        log(sim.logPredictive, `${id} failed · not flagged in time`, "risk", e.t0 + FAIL_AT);
+        log(sim.logPredictive, id, "missed", e.t0 + FAIL_AT);
       }
     }
     if (crossed(e, LIFETIME)) {
-      log(sim.logReactive, `${id} back online after replacement`, "muted", e.t0 + LIFETIME);
-      if (!e.caught) log(sim.logPredictive, `${id} back online after replacement`, "muted", e.t0 + LIFETIME);
+      log(sim.logReactive, id, "online", e.t0 + LIFETIME);
+      if (!e.caught) log(sim.logPredictive, id, "online", e.t0 + LIFETIME);
     }
   }
   sim.events = sim.events.filter((e) => now - e.t0 < LIFETIME + 0.1);
@@ -212,6 +222,7 @@ function Fleet({
   sweep: boolean;
 }) {
   const down = cells.filter((c) => c === "offline" || c === "failed").length;
+  const { t, lang } = useLang();
   return (
     <div className={`panel flex flex-col ${predictive ? "border-signal/30" : ""}`}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -224,15 +235,18 @@ function Fleet({
         </span>
       </div>
 
-      <div className="relative overflow-hidden rounded-md">
+      <div dir="ltr" className="relative overflow-hidden rounded-md">
         <div
           className="grid gap-1"
           style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` }}
           role="img"
-          aria-label={`${title}: ${outages} unplanned outages${predictive ? `, ${planned} planned replacements` : ""} so far.`}
+          aria-label={t(
+            `${title}: ${outages} unplanned outages${predictive ? `, ${planned} planned replacements` : ""} so far.`,
+            `${title}: ${outages} השבתות לא מתוכננות${predictive ? `, ${planned} החלפות מתוכננות` : ""} עד עכשיו.`,
+          )}
         >
           {cells.map((c, i) => (
-            <span key={i} title={`${driveId(i)} · ${LABEL[c]}`} className={`aspect-[4/5] rounded-[3px] transition-colors duration-300 ${STYLE[c]}`} />
+            <span key={i} title={`${driveId(i)} · ${LABEL[c][lang]}`} className={`aspect-[4/5] rounded-[3px] transition-colors duration-300 ${STYLE[c]}`} />
           ))}
         </div>
         {predictive && running && sweep && (
@@ -247,13 +261,13 @@ function Fleet({
       </div>
 
       <dl className="mt-5 grid grid-cols-3 gap-3 border-t hairline pt-4">
-        <Counter label="Unplanned outages" value={outages} tone="text-risk" />
-        <Counter label="Planned replacements" value={planned} tone="text-signal" />
-        <Counter label="Drives down now" value={down} tone="text-ink" />
+        <Counter label={t("Unplanned outages", "השבתות לא מתוכננות")} value={outages} tone="text-risk" />
+        <Counter label={t("Planned replacements", "החלפות מתוכננות")} value={planned} tone="text-signal" />
+        <Counter label={t("Drives down now", "כוננים מושבתים כרגע")} value={down} tone="text-ink" />
       </dl>
 
       <div className="mt-4 border-t hairline pt-3">
-        <p className="mb-2 text-[11px] text-muted">Event feed</p>
+        <p className="mb-2 text-[11px] text-muted">{t("Event feed", "יומן אירועים")}</p>
         <ol className="h-[7.5rem] space-y-1 overflow-hidden font-mono text-[11.5px]">
           <AnimatePresence initial={false}>
             {log.map((l) => (
@@ -267,11 +281,13 @@ function Fleet({
                 className="flex gap-3 truncate"
               >
                 <span className="text-faint">{clock(l.at)}</span>
-                <span className={`truncate ${TONE[l.tone]}`}>{l.text}</span>
+                <span className={`truncate ${TONE[LOG_TEXT[l.kind].tone]}`}>
+                  <span dir="ltr">{l.drive}</span> {LOG_TEXT[l.kind][lang]}
+                </span>
               </motion.li>
             ))}
           </AnimatePresence>
-          {!log.length && <li className="text-faint">waiting for telemetry…</li>}
+          {!log.length && <li className="text-faint">{t("waiting for telemetry…", "ממתין לנתונים…")}</li>}
         </ol>
       </div>
     </div>
@@ -309,6 +325,7 @@ export function FleetComparison({ catchRate }: { catchRate: number }) {
 
   const s = sim.current;
   const running = playing && inView;
+  const { t, lang } = useLang();
 
   return (
     <div ref={ref}>
@@ -319,20 +336,22 @@ export function FleetComparison({ catchRate }: { catchRate: number }) {
               {running && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-risk opacity-70" />}
               <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${running ? "bg-risk" : "bg-faint"}`} />
             </span>
-            {running ? "Live simulation" : "Simulation paused"}
+            {running ? t("Live simulation", "סימולציה חיה") : t("Simulation paused", "הסימולציה מושהית")}
           </span>
           <span className="num text-xs text-muted">
-            running <span className="text-soft">{clock(s.t)}</span>
+            {t("running", "זמן ריצה")} <span className="text-soft">{clock(s.t)}</span>
           </span>
-          <span className="hidden text-xs text-muted sm:inline">2 fleets · {N} drives each · the same failures</span>
+          <span className="hidden text-xs text-muted sm:inline">
+            {t(`2 fleets · ${N} drives each · the same failures`, `2 ציים · ${N} כוננים בכל אחד · אותן תקלות`)}
+          </span>
         </div>
         {(
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setPlaying((p) => !p)} className="chip hover:border-signal hover:text-ink">
-              {playing ? <Pause size={12} aria-hidden /> : <Play size={12} aria-hidden />} {playing ? "Pause" : "Play"}
+              {playing ? <Pause size={12} aria-hidden /> : <Play size={12} aria-hidden className="rtl:rotate-180" />} {playing ? t("Pause", "השהה") : t("Play", "הפעל")}
             </button>
             <button type="button" onClick={restart} className="chip hover:border-signal hover:text-ink">
-              <RotateCcw size={12} aria-hidden /> Restart
+              <RotateCcw size={12} aria-hidden /> {t("Restart", "מההתחלה")}
             </button>
           </div>
         )}
@@ -340,9 +359,9 @@ export function FleetComparison({ catchRate }: { catchRate: number }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Fleet
-          title="Reactive maintenance"
-          sub="The drive is replaced after it fails"
-          badge="Today"
+          title={t("Reactive maintenance", "תחזוקה תגובתית")}
+          sub={t("The drive is replaced after it fails", "הכונן מוחלף אחרי שהוא מתקלקל")}
+          badge={t("Today", "היום")}
           predictive={false}
           cells={cellsOf(s, false)}
           outages={s.counts.reactiveOutages}
@@ -352,9 +371,9 @@ export function FleetComparison({ catchRate }: { catchRate: number }) {
           sweep={!reduce}
         />
         <Fleet
-          title="Predictive maintenance"
-          sub="At-risk drives are flagged and replaced first"
-          badge="With Drive Foresight"
+          title={t("Predictive maintenance", "תחזוקה חזויה")}
+          sub={t("At-risk drives are flagged and replaced first", "כוננים בסיכון מסומנים ומוחלפים מראש")}
+          badge={t("With Drive Foresight", "עם Drive Foresight")}
           predictive
           cells={cellsOf(s, true)}
           outages={s.counts.predictiveOutages}
@@ -365,18 +384,19 @@ export function FleetComparison({ catchRate }: { catchRate: number }) {
         />
       </div>
 
-      <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted" aria-label="Legend">
+      <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted" aria-label={t("Legend", "מקרא")}>
         {LEGEND.map((st) => (
           <li key={st} className="flex items-center gap-2">
             <span className={`inline-block h-3 w-2.5 rounded-[2px] ${STYLE[st]}`} />
-            {LABEL[st].charAt(0).toUpperCase() + LABEL[st].slice(1)}
+            {LABEL[st][lang].charAt(0).toUpperCase() + LABEL[st][lang].slice(1)}
           </li>
         ))}
       </ul>
       <p className="mt-3 text-xs leading-relaxed text-faint">
-        Simulation. Both fleets receive exactly the same failures at the same moments. In the predictive fleet, {Math.round(catchRate * 100)}% of
-        failures are caught in advance — the share of failing test drives the model flagged within their final 30 days. The rest still fail. Timing
-        and failure frequency are illustrative, not data.
+        {t(
+          `Simulation. Both fleets receive exactly the same failures at the same moments. In the predictive fleet, ${Math.round(catchRate * 100)}% of failures are caught in advance — the share of failing test drives the model flagged within their final 30 days. The rest still fail. Timing and failure frequency are illustrative, not data.`,
+          `סימולציה. שני הציים מקבלים בדיוק את אותן תקלות באותם רגעים. בצי החזוי ${Math.round(catchRate * 100)}% מהתקלות נתפסות מראש: זה שיעור כונני המבחן שהמודל סימן ב־30 הימים שלפני התקלה. השאר עדיין מתקלקלים. התזמון ותדירות התקלות הם להמחשה בלבד, לא נתונים.`,
+        )}
       </p>
     </div>
   );

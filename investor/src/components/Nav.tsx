@@ -1,18 +1,37 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Menu, X } from "lucide-react";
+import { ArrowRight, Languages, Menu, X } from "lucide-react";
 import { api } from "../lib/api";
 import { openContact } from "../lib/contact";
+import { useLang, type Bi } from "../lib/i18n";
 import { useApi } from "../lib/useApi";
 
-export const NAV_LINKS = [
-  { id: "problem", label: "The Problem" },
-  { id: "intelligence", label: "Technology" },
-  { id: "breakthrough", label: "Results" },
-  { id: "value", label: "Value" },
-  { id: "vision", label: "Vision" },
-  { id: "team", label: "Team" },
-  { id: "product", label: "Try it live" },
+export const NAV_LINKS: { id: string; label: Bi }[] = [
+  { id: "problem", label: { en: "The Problem", he: "הבעיה" } },
+  { id: "intelligence", label: { en: "Technology", he: "הטכנולוגיה" } },
+  { id: "breakthrough", label: { en: "Results", he: "תוצאות" } },
+  { id: "value", label: { en: "Value", he: "ערך" } },
+  { id: "vision", label: { en: "Vision", he: "חזון" } },
+  { id: "team", label: { en: "Team", he: "הצוות" } },
+  { id: "product", label: { en: "Try it live", he: "נסו בעצמכם" } },
 ];
+
+/** Switches between English and Hebrew; shows the language you would switch to. */
+export function LangToggle({ className = "" }: { className?: string }) {
+  const { lang, setLang } = useLang();
+  const next = lang === "en" ? "he" : "en";
+  return (
+    <button
+      type="button"
+      onClick={() => setLang(next)}
+      lang={next}
+      aria-label={next === "he" ? "החלפה לעברית" : "Switch to English"}
+      className={`inline-flex items-center gap-1.5 rounded-full border border-line-strong px-3 py-2 text-sm text-soft transition hover:border-signal hover:text-ink ${className}`}
+    >
+      <Languages size={14} aria-hidden />
+      {next === "he" ? "עברית" : "English"}
+    </button>
+  );
+}
 
 function Logo() {
   return (
@@ -31,6 +50,7 @@ export function Nav() {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const health = useApi(api.health);
+  const { t, lang } = useLang();
 
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 24);
@@ -65,7 +85,7 @@ export function Nav() {
   }, []);
 
   const ok = health.data?.engine.ok;
-  const status = health.loading ? "checking engine" : ok ? "Engine live" : "Engine offline";
+  const status = health.loading ? t("checking engine", "בודק מנוע") : ok ? t("Engine live", "המנוע פעיל") : t("Engine offline", "המנוע לא זמין");
 
   return (
     <header
@@ -74,13 +94,13 @@ export function Nav() {
       }`}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
-        <a href="#hook" className="flex shrink-0 items-center gap-2.5" aria-label="Drive Foresight, back to top" onClick={() => setOpen(false)}>
+        <a href="#hook" className="flex shrink-0 items-center gap-2.5" aria-label={t("Drive Foresight, back to top", "Drive Foresight, חזרה לראש העמוד")} onClick={() => setOpen(false)}>
           <Logo />
           <span className="text-[15px] font-semibold uppercase tracking-[0.08em]">Drive Foresight</span>
         </a>
 
-        <nav aria-label="Sections" className="hidden lg:block">
-          <ul className="flex items-center gap-7">
+        <nav aria-label={t("Sections", "חלקי העמוד")} className="hidden lg:block">
+          <ul className="flex items-center gap-6">
             {NAV_LINKS.map((l) => (
               <li key={l.id}>
                 {l.id === "product" ? (
@@ -92,7 +112,7 @@ export function Nav() {
                     }`}
                   >
                     <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
-                    {l.label}
+                    {l.label[lang]}
                   </a>
                 ) : (
                   <a
@@ -100,7 +120,7 @@ export function Nav() {
                     aria-current={active === l.id ? "true" : undefined}
                     className={`relative py-5 text-sm transition-colors ${active === l.id ? "text-ink" : "text-muted hover:text-ink"}`}
                   >
-                    {l.label}
+                    {l.label[lang]}
                     {active === l.id && <span className="absolute inset-x-0 -bottom-px h-px bg-signal" />}
                   </a>
                 )}
@@ -122,12 +142,13 @@ export function Nav() {
             onClick={openContact}
             className="hidden items-center gap-2 rounded-full border border-signal/50 px-4 py-2 text-sm transition hover:border-signal hover:bg-signal/10 sm:inline-flex"
           >
-            Get in touch <ArrowRight size={14} aria-hidden />
+            {t("Get in touch", "צרו קשר")} <ArrowRight size={14} aria-hidden className="rtl:rotate-180" />
           </button>
+          <LangToggle />
           <button
             type="button"
             className="rounded-lg p-2 text-soft hover:text-ink lg:hidden"
-            aria-label={open ? "Close menu" : "Open menu"}
+            aria-label={open ? t("Close menu", "סגירת התפריט") : t("Open menu", "פתיחת התפריט")}
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
           >
@@ -137,12 +158,12 @@ export function Nav() {
       </div>
 
       {open && (
-        <nav aria-label="Sections" className="border-t hairline px-4 pb-4 lg:hidden">
+        <nav aria-label={t("Sections", "חלקי העמוד")} className="border-t hairline px-4 pb-4 lg:hidden">
           <ul className="grid gap-1 pt-2">
             {NAV_LINKS.map((l) => (
               <li key={l.id}>
                 <a href={`#${l.id}`} onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-soft hover:bg-deep hover:text-ink">
-                  {l.label}
+                  {l.label[lang]}
                 </a>
               </li>
             ))}
@@ -153,9 +174,9 @@ export function Nav() {
                   setOpen(false);
                   openContact();
                 }}
-                className="mt-1 w-full rounded-lg border border-signal/40 px-3 py-2.5 text-left text-signal hover:bg-signal/10"
+                className="mt-1 w-full rounded-lg border border-signal/40 px-3 py-2.5 text-start text-signal hover:bg-signal/10"
               >
-                Get in touch
+                {t("Get in touch", "צרו קשר")}
               </button>
             </li>
           </ul>
@@ -166,6 +187,7 @@ export function Nav() {
 }
 
 export function Footer() {
+  const { t } = useLang();
   return (
     <footer className="border-t hairline py-10">
       <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-6 px-4 text-xs text-faint sm:px-6 lg:px-8">
@@ -174,9 +196,10 @@ export function Footer() {
           <span className="text-sm font-semibold uppercase tracking-[0.08em] text-soft">Drive Foresight</span>
         </div>
         <p className="max-w-xl leading-relaxed">
-          Performance figures are read from the project's evaluation files in <span className="font-mono">results/</span>. Predictions come from the
-          saved models in <span className="font-mono">models/</span>, served by the local engine. Training data: Backblaze public drive-stats archives,
-          Q1 2022 – Q2 2026. Runs entirely on this machine.
+          {t(
+            "Performance figures are read from the project's evaluation files. Predictions come from the saved models, served by the local engine. Training data: Backblaze public drive-stats archives, Q1 2022 – Q2 2026. Runs entirely on this machine.",
+            "נתוני הביצועים נקראים מקובצי ההערכה של הפרויקט. החיזויים מגיעים מהמודלים השמורים, דרך מנוע החיזוי המקומי. נתוני האימון: ארכיון Drive Stats הציבורי של Backblaze, רבעון 1 2022 – רבעון 2 2026. הכל רץ על המחשב הזה בלבד.",
+          )}
         </p>
       </div>
     </footer>

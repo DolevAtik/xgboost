@@ -23,7 +23,7 @@
   --color-series-xgb: #0ea5c6;
   --color-series-cnn: #8b6cf0;
 
-  --font-sans: "Inter Tight Variable", "Inter Tight", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-sans: "Inter Tight Variable", "Inter Tight", "Heebo Variable", "Heebo", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, Consolas, monospace;
 
   --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
@@ -155,6 +155,28 @@
     font-size: 11px;
     color: var(--color-soft);
   }
+}
+
+/* Hebrew: Heebo for every glyph, and none of the Latin letter-spacing tricks. */
+[dir="rtl"] body {
+  font-family: "Heebo Variable", "Heebo", "Inter Tight Variable", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+}
+[dir="rtl"] .kicker,
+[dir="rtl"] .uppercase,
+[dir="rtl"] .chip,
+[dir="rtl"] [class*="tracking-[0.1"],
+[dir="rtl"] [class*="tracking-wid"] {
+  letter-spacing: 0.02em;
+}
+[dir="rtl"] .chip,
+[dir="rtl"] .kicker {
+  font-family: "Heebo Variable", "Heebo", sans-serif;
+  font-weight: 500;
+}
+[dir="rtl"] h1,
+[dir="rtl"] h2,
+[dir="rtl"] h3 {
+  letter-spacing: -0.01em;
 }
 
 /* One grain layer for the whole page. */

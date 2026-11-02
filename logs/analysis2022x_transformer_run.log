@@ -1,0 +1,1178 @@
+C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\nbformat\validator.py:434: MissingIDFieldWarning: Cell is missing an id field, this will become a hard error in future nbformat versions. You may want to use `normalize()` on your notebooks before validations (available since nbformat 5.1.4). Previous versions of nbformat are fixing this issue transparently, and will stop doing so in the future.
+  _validate(nbdict, ref, version, version_minor, relax_add_props)
+executing Dataset_backblaze_Analysis_2022_XGBoost.ipynb: 38 code cells, timeout 604800s
+C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\zmq\_future.py:718: RuntimeWarning: Proactor event loop does not implement add_reader family of methods required for zmq. Registering an additional selector thread for add_reader support via tornado. Use `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())` to avoid this warning.
+  self._get_loop()
+[IPKernelApp] WARNING | Kernel is running over TCP without encryption. All communication (including code and outputs) is sent in plain text and is susceptible to eavesdropping. Use IPC transport or launch with kernel manager-provisioned CurveZMQ keys to enable transport encryption.
+
+==============================================================================
+[cell 1/38] import gc, json, os, sys, time
+==============================================================================
+torch 2.14.0.dev20260708+cu132 | xgboost 3.4.1 | device cuda
+18 shards from 2022 on: Q1_2022 -> Q2_2026
+  Q1_2022, Q2_2022, Q3_2022, Q4_2022, Q1_2023, Q2_2023, Q3_2023, Q4_2023, Q1_2024, Q2_2024, Q3_2024, Q4_2024, Q1_2025, Q2_2025, Q3_2025, Q4_2025, Q1_2026, Q2_2026
+[cell 1 done in 10.3s]
+
+==============================================================================
+[cell 2/38] t0 = time.time()
+==============================================================================
+  census cached: 416,428 drives
+
+416,428 drives | 457,380,330 observed drive-days | 19,024 drives with a failure event
+2022-01-01 -> 2026-06-30   (0s)
+[cell 2 done in 0.1s]
+
+==============================================================================
+[cell 3/38] audit_df = ap.sample_audit_frame(cfg0, census, n_drives=15_000)
+==============================================================================
+  [ 1/18] Q1_2022.parquet    669,411 rows kept
+  [ 2/18] Q2_2022.parquet    691,592 rows kept
+  [ 3/18] Q3_2022.parquet    735,216 rows kept
+  [ 4/18] Q4_2022.parquet    768,652 rows kept
+  [ 5/18] Q1_2023.parquet    767,257 rows kept
+  [ 6/18] Q2_2023.parquet    780,868 rows kept
+  [ 7/18] Q3_2023.parquet    843,212 rows kept
+  [ 8/18] Q4_2023.parquet    885,087 rows kept
+  [ 9/18] Q1_2024.parquet    902,083 rows kept
+  [10/18] Q2_2024.parquet    933,665 rows kept
+  [11/18] Q3_2024.parquet    962,131 rows kept
+  [12/18] Q4_2024.parquet    985,769 rows kept
+  [13/18] Q1_2025.parquet  1,002,847 rows kept
+  [14/18] Q2_2025.parquet  1,037,907 rows kept
+  [15/18] Q3_2025.parquet  1,074,738 rows kept
+  [16/18] Q4_2025.parquet  1,116,665 rows kept
+  [17/18] Q1_2026.parquet  1,104,216 rows kept
+  [18/18] Q2_2026.parquet  1,156,039 rows kept
+  audit frame: 16,417,355 drive-days over 15,000 drives, 656 failure events (base rate 0.00400%)
+[audit] scoring 23 telemetry columns, 6 identifier/topology columns, and 6 derived record-geometry probes over 16,417,355 drive-days ...
+============================================================================================
+STEP 1 -- TARGET LEAKAGE AND PROXY AUDIT
+============================================================================================
+  drive-days ........... 16,417,355
+  distinct drives ...... 15,000
+  failure events ....... 656 (base rate 0.0040%)
+
+  thresholds: severe if rank-AUC >= 0.95, or 1-threshold balanced acc >= 0.90,
+              or |r| >= 0.50, or missingness gap >= 0.25, or level lift >= 20x
+
+--------------------------------------------------------------------------------------------
+A. TELEMETRY COLUMNS vs failure -- top 12 by rank AUC
+--------------------------------------------------------------------------------------------
+       column coverage  n_unique   corr auc_directional balanced_acc verdict
+smart_187_raw   0.3930      1120 0.0174          0.8887       0.8785 suspect
+smart_183_raw   0.0325       169 0.0006          0.7950       0.7586   clean
+smart_197_raw   0.9685      1396 0.0651          0.7862       0.7842   clean
+  smart_5_raw   0.9910      6815 0.0212          0.7859       0.7807   clean
+smart_198_raw   0.9902       890 0.0640          0.7004       0.6994   clean
+  smart_4_raw   0.9877       423 0.0004          0.6590       0.6203   clean
+smart_188_raw   0.3911      1000 0.0067          0.6579       0.6558 suspect
+ smart_12_raw   0.9982       346 0.0006          0.6403       0.6046   clean
+  smart_9_raw   0.9982     82565 0.0027          0.6211       0.6082   clean
+smart_240_raw   0.6579     87644 0.0026          0.6022       0.5969   clean
+smart_193_raw   0.9867    136319 0.0025          0.5959       0.6000   clean
+smart_242_raw   0.4636   6541570 0.0000          0.5864       0.5794 suspect
+
+--------------------------------------------------------------------------------------------
+B. MISSINGNESS AS A LEAK CHANNEL -- P(null | failure) vs P(null | healthy)
+--------------------------------------------------------------------------------------------
+       column null_rate null_if_failure null_if_healthy missing_gap verdict
+smart_242_raw    0.5364          0.4131          0.5364     -0.1233 suspect
+smart_241_raw    0.5364          0.4131          0.5364     -0.1233 suspect
+smart_188_raw    0.6089          0.4909          0.6089     -0.1180 suspect
+smart_190_raw    0.6099          0.4954          0.6099     -0.1145 suspect
+smart_187_raw    0.6070          0.4954          0.6070     -0.1116 suspect
+smart_184_raw    0.8755          0.7744          0.8755     -0.1011 suspect
+
+--------------------------------------------------------------------------------------------
+C. IDENTIFIER / TOPOLOGY COLUMNS -- categorical association
+--------------------------------------------------------------------------------------------
+        column  cardinality cramers_v max_lift     verdict
+      vault_id          266    0.0057   4.8348       clean
+capacity_bytes           18    0.0032   4.7270       clean
+  pod_slot_num           60    0.0045   2.0794 SEVERE LEAK
+    datacenter            6    0.0017   1.4073       clean
+    cluster_id            7    0.0018   1.3558       clean
+        pod_id           20    0.0010   1.3371       clean
+
+--------------------------------------------------------------------------------------------
+D. RECORD-GEOMETRY PROBES -- features a naive engineering step would build
+--------------------------------------------------------------------------------------------
+  [per drive-day]  target = failure flag on that day
+                            column auc_directional balanced_acc    corr     verdict
+               days_to_last_record          0.9916       0.9904 -0.0093 SEVERE LEAK
+days_from_record_end_to_export_end          0.9490       0.9398  0.0191 SEVERE LEAK
+     still_reporting_at_export_end          0.9393       0.9393 -0.0175 SEVERE LEAK
+                record_length_days          0.8402       0.7681 -0.0093       clean
+           days_since_first_record          0.5533       0.5490  0.0012       clean
+                calendar_day_index          0.5028       0.5140  0.0001       clean
+
+  [per drive]  target = drive ever failed
+                            column auc_directional balanced_acc    corr     verdict
+days_from_record_end_to_export_end          0.9460       0.9443  0.4785 SEVERE LEAK
+     still_reporting_at_export_end          0.9439       0.9439 -0.5176 SEVERE LEAK
+                record_length_days          0.6985       0.6866 -0.1311       clean
+
+
+============================================================================================
+VERDICT
+============================================================================================
+  4 column(s) flagged SEVERE -- dropped from X before preprocessing:
+    - days_to_last_record          rank AUC 0.992 on its own -- reproduces the label
+    - days_from_record_end_to_export_end one threshold gives balanced accuracy 0.940
+    - still_reporting_at_export_end one threshold gives balanced accuracy 0.944
+    - pod_slot_num                 null on 58.2% of failure days vs 28.0% of healthy days
+
+  7 column(s) flagged SUSPECT -- also excluded, see reasons:
+    - smart_187_raw                rank AUC 0.889 -- unusually high for telemetry
+    - smart_188_raw                missingness gap 0.118 between failure and healthy days
+    - smart_242_raw                missingness gap 0.123 between failure and healthy days
+    - smart_241_raw                missingness gap 0.123 between failure and healthy days
+    - smart_190_raw                missingness gap 0.114 between failure and healthy days
+    - smart_189_raw                missingness gap 0.100 between failure and healthy days
+    - smart_184_raw                missingness gap 0.101 between failure and healthy days
+
+  blocklist (14 names) enforced by LeakageReport.assert_clean():
+    date, days_from_record_end_to_export_end, days_to_last_record, failure, pod_slot_num, serial_number, smart_184_raw, smart_187_raw, smart_188_raw, smart_189_raw, smart_190_raw, smart_241_raw, smart_242_raw, still_reporting_at_export_end
+============================================================================================
+[cell 3 done in 371.6s]
+
+==============================================================================
+[cell 4/38] features = la.select_feature_columns(audit_df, report)
+==============================================================================
+15 attributes survive coverage >= 50% and the blocklist:
+
+  smart_197_raw      coverage  96.85%      1,396 distinct  rank AUC 0.7862
+  smart_5_raw        coverage  99.10%      6,815 distinct  rank AUC 0.7859
+  smart_198_raw      coverage  99.02%        890 distinct  rank AUC 0.7004
+  smart_4_raw        coverage  98.77%        423 distinct  rank AUC 0.6590
+  smart_12_raw       coverage  99.82%        346 distinct  rank AUC 0.6403
+  smart_9_raw        coverage  99.82%     82,565 distinct  rank AUC 0.6211
+  smart_240_raw      coverage  65.79%     87,644 distinct  rank AUC 0.6022
+  smart_193_raw      coverage  98.67%    136,319 distinct  rank AUC 0.5959
+  smart_1_raw        coverage  99.74%  5,427,754 distinct  rank AUC 0.5781
+  smart_7_raw        coverage  98.77%  5,873,176 distinct  rank AUC 0.5710
+  smart_3_raw        coverage  98.77%      3,417 distinct  rank AUC 0.5443
+  smart_192_raw      coverage  99.49%     16,010 distinct  rank AUC 0.5293
+  smart_194_raw      coverage  99.82%         60 distinct  rank AUC 0.5166
+  smart_199_raw      coverage  99.10%      1,274 distinct  rank AUC 0.5007
+  smart_10_raw       coverage  98.41%          5 distinct  rank AUC 0.5001
+[leakage guard] 15 feature columns checked against a 14-name blocklist -- clean.
+  saved results/figures/2022x_step1_leakage_audit.png
+<Figure size 1650x990 with 4 Axes>
+21499
+[cell 4 done in 3.2s]
+
+==============================================================================
+[cell 5/38] cfg = ap.ArchiveConfig(
+==============================================================================
+========================================================================================
+STEP A -- DRIVE CENSUS
+========================================================================================
+  census cached: 416,428 drives
+
+========================================================================================
+STEP B -- DENSE LAYOUT
+========================================================================================
+  413,045 drives kept, 3,383 dropped (shorter than 30 days)
+  459,048,144 dense drive-days (457,317,880 observed, 1,730,264 forward-filled)
+  matrix 459,048,144 x 46 float32 = 84.5 GB memory-mapped
+
+========================================================================================
+STEP C -- EXTERNAL SORT INTO 48 BUCKETS
+========================================================================================
+  buckets cached
+
+========================================================================================
+STEP D -- DENSIFY
+========================================================================================
+  dense matrix cached
+
+ArchiveSeriesStore: 413,045 drives, 459,048,144 dense drive-days, 46 channels (84 GB memory-mapped), 18,564 drives with a failure event
+[cell 5 done in 0.2s]
+
+==============================================================================
+[cell 6/38] splits = ap.grouped_drive_split(store, cfg)
+==============================================================================
+========================================================================================
+LABEL-LEAKAGE VERIFICATION
+========================================================================================
+  1. names ........... 46 channels, none named after `failure`
+  2. storage ......... values -> values.f32, labels -> failure.u8 (separate files, no shared memory)
+  3. independence .... labels overwritten with noise; X re-gathered bit-identical over 4,096 windows  PASS
+  4. separability .... 20,000 probe windows, 0.395% positive
+     strongest single channel: smart_197_raw at AUC 0.6911 (a proxy would sit at ~1.00)
+
+  the model input is (batch, 30, 46) and contains SMART levels, their deltas and the observed mask -- nothing else
+[cell 6 done in 9.2s]
+
+==============================================================================
+[cell 7/38] # The strongest channels, ranked against the window label. Useful sign
+==============================================================================
+strongest single channels vs the 30-day window label (20,000 probe windows):
+
+           channel  auc_vs_window_label
+1    smart_197_raw             0.691124
+2      smart_5_raw             0.682798
+3    smart_198_raw             0.648322
+4      smart_1_raw             0.627615
+5      smart_7_raw             0.622210
+6   smart_5_raw_d7             0.618829
+7    smart_193_raw             0.602454
+8      smart_3_raw             0.599101
+9   smart_7_raw_d1             0.594618
+10  smart_9_raw_d1             0.592584
+11   smart_240_raw             0.590284
+12  smart_7_raw_d7             0.590062
+
+ceiling for a non-leaked channel: 0.95     observed maximum: 0.6911
+model input shape: (batch, 30, 46) -- SMART levels, 1- and 7-day deltas, observed mask. No label channel.
+[cell 7 done in 0.0s]
+
+==============================================================================
+[cell 8/38] tiles = {name: ap.TilingWindows(store, splits[name], batch_size=cfg.ba
+==============================================================================
+       drives drives with a failure record days (dense) tiling 30-day windows tiling batches every possible window
+split                                                                                                             
+train 280,870                12,623         312,175,229            10,519,256          2,569           304,029,999
+val    49,566                 2,228          55,215,887             1,860,545            455            53,778,473
+test   82,609                 3,713          91,657,028             3,088,649            755            89,261,367
+
+TIMELINE COVERAGE
+  413,045 drives, 459,048,144 dense drive-days
+  15,468,450 non-overlapping 30-day windows cover the entire timeline
+  at batch size 4,096 that is 3,779 batches in total
+  train | tiling W=30  |   10,519,256 windows | 280,870 drives | positive rate  0.2401% (25,254 positive windows) | 2,569 batches
+  val   | tiling W=30  |    1,860,545 windows |  49,566 drives | positive rate  0.2391% (4,449 positive windows) | 455 batches
+  test  | tiling W=30  |    3,088,649 windows |  82,609 drives | positive rate  0.2404% (7,424 positive windows) | 755 batches
+[cell 8 done in 4.9s]
+
+==============================================================================
+[cell 9/38] # Per-drive accounting: how many windows each drive needs to have its 
+==============================================================================
+per-drive window counts, first 20 test drives (batch size 4,096):
+
+ drive_index    serial_number  record_days  windows_to_cover_timeline  days_covered  overlap_on_last_window  drive_has_failure
+           3 02308a3415be0010         1642                         55          1650                       8              False
+           7 0559e3d009d20010          993                         34          1020                      27              False
+           8 0564f6f3fab90010         1642                         55          1650                       8              False
+           9 059bba587f390010          993                         34          1020                      27              False
+          15 078ea1af2c3f0010         1642                         55          1650                       8              False
+          26 0e4aa019c4690010         1642                         55          1650                       8              False
+          29     1030A004F9RG          252                          9           270                      18              False
+          30     1030A005F9RG          453                         16           480                      27              False
+          38     1030A00MF9RG          813                         28           840                      27              False
+          39     1030A00RF97G         1642                         55          1650                       8              False
+          48     1030A05GF97G         1642                         55          1650                       8              False
+          49     1030A05QF97G         1642                         55          1650                       8              False
+          50     1030A05TF97G         1642                         55          1650                       8              False
+          61     1040A00FF9RG          276                         10           300                      24              False
+          64     1040A00MF9RG         1132                         38          1140                       8              False
+          67     1040A00VF97G         1066                         36          1080                      14               True
+          70     1040A012F97G         1642                         55          1650                       8              False
+          84     1040A024F9RG         1166                         39          1170                       4              False
+          91     1040A02DF97G         1642                         55          1650                       8              False
+          99     1040A033F9RG         1103                         37          1110                       7              False
+
+across all 82,609 test drives:
+  windows per drive .... min 1, median 38, mean 37.4, max 55
+  total windows ........ 3,088,649
+  total batches ........ 755 of up to 4,096 windows each
+  days covered ......... 92,659,470 (record holds 91,657,028; the difference is the overlap pulled back onto the last window of each drive)
+[cell 9 done in 0.2s]
+
+==============================================================================
+[cell 10/38] bundle = ap.build_archive_bundle(cfg, store=store, val_stride=1, verbo
+==============================================================================
+
+grouped split by drive id -- no drive appears in two splits:
+  train  280,870 drives  (12,623 carry a failure, 4.49%)
+  val     49,566 drives  (2,228 carry a failure, 4.50%)
+  test    82,609 drives  (3,713 carry a failure, 4.49%)
+  scaler cached -- matrix already standardised in place
+
+Window datasets (window_days=30, horizon_days=30, stride_days=1):
+  train | random spd 4   |    1,123,480 windows | 280,870 drives | positive rate  1.1078% (measured, 12,623 failing drives)
+  val   | enumerate stride 1  |   53,778,473 windows |  49,566 drives | positive rate  0.1277% (68,656 positive windows)
+  test  | enumerate stride 1  |   89,261,367 windows |  82,609 drives | positive rate  0.1287% (114,854 positive windows)
+
+Raw pos_weight from the training positive rate: 89.3
+[cell 10 done in 0.6s]
+
+==============================================================================
+[cell 11/38] SEARCH_CSV = "results/w2022x_cnn_search.csv"
+==============================================================================
+loaded 30 cached trials from results/w2022x_cnn_search.csv
+
+top 10 configurations by validation PR-AUC:
+
+ layers     dilations  kernel_size  hidden_dim  dropout    lr  weight_decay  train_positive_ratio  parameters  val_pr_auc  val_roc_auc
+      5    1-2-4-8-16            3         128      0.1 0.001       0.00001                  0.25      519297    0.145695     0.877631
+      3         1-2-4            3          96      0.3 0.003       0.00001                  0.40      185569    0.144153     0.880100
+      4       1-2-4-8            5          96      0.1 0.001       0.00010                  0.40      379297    0.143606     0.878669
+      6 1-2-4-8-16-32            5         128      0.2 0.001       0.00001                  0.40      990593    0.143038     0.884129
+      6   1-1-2-2-4-4            3          64      0.1 0.003       0.00001                  0.25      161729    0.142635     0.876482
+      6 1-2-4-8-16-32            3         128      0.2 0.003       0.00001                  0.40      618369    0.141468     0.879268
+      6 1-2-4-8-16-32            5          64      0.1 0.003       0.00001                  0.40      257729    0.141463     0.881769
+      5    1-2-4-8-16            5          64      0.2 0.001       0.00001                  0.15      216385    0.141252     0.871254
+      6 1-2-4-8-16-32            3         128      0.1 0.001       0.00001                  0.15      618369    0.140115     0.875332
+      4       1-2-4-8            3          96      0.2 0.001       0.00001                  0.15      241441    0.139936     0.874657
+
+how depth alone scores (median over the trials at each layer count):
+        count  median     max
+layers                       
+2           4  0.1358  0.1380
+3           3  0.1342  0.1442
+4           6  0.1339  0.1436
+5           7  0.1375  0.1457
+6          10  0.1390  0.1430
+[cell 11 done in 0.0s]
+
+==============================================================================
+[cell 12/38] best = search.iloc[0]
+==============================================================================
+winner: 5 layers, dilations 1-2-4-8-16, kernel 3, hidden 128, dropout 0.1, lr 0.001, wd 1e-05, positive_ratio 0.25
+  519,297 parameters, search val PR-AUC 0.1457
+  the previous hand-picked shape (5 layers, hidden 64, kernel 3) scored 0.1382 -> +5.5%
+[cell 12 done in 0.0s]
+
+==============================================================================
+[cell 13/38] device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+==============================================================================
+input (2, 30, 46) -> (2, 1)  (one logit per window)
+519,297 trainable parameters on cuda
+[cell 13 done in 44.0s]
+
+==============================================================================
+[cell 14/38] import overfit_experiments as ox
+==============================================================================
+  trn*  | enumerate stride 30 |    1,805,461 windows |  49,566 drives | positive rate  0.1295% (2,338 positive windows)
+  val   | enumerate stride 30 |    1,811,777 windows |  49,566 drives | positive rate  0.1274% (2,308 positive windows)
+  test  | enumerate stride 30 |    3,007,386 windows |  82,609 drives | positive rate  0.1285% (3,864 positive windows)
+resumed results/experiments_results.xlsx: ['baseline', 'shallow', 'deeper', 'no_dilation', 'kernel_5', 'narrow', 'wide', 'dropout_0.3', 'weight_decay_1e-4', 'lr_3e-03', 'lr_3e-04', 'xgboost']
+[cell 14 done in 1.2s]
+
+==============================================================================
+[cell 15/38] # test_ds is watch-only: scored each epoch for the train-vs-test chart
+==============================================================================
+========================================================================================
+TRAINING -- 519,297 parameters, up to 20 epochs; early stop on val_pr_auc (max), patience 3, min_delta 0.001
+  overfit rule: gap > {'pr_auc': 15.0, 'roc_auc': 3.0, 'bal_acc': 10.0, 'loss': 25.0} (percent), stops the run
+  train probe 1,805,461 windows / 49,566 drives / 2,338 positive  vs  val 1,811,777 windows / 49,566 drives / 2,308 positive
+========================================================================================
+ ep |       loss tr/val |   PR-AUC tr/val |    ROC tr/val | balacc tr/val |  PR gap |   sec |
+  1 |  0.01791/0.01779  |  0.1248/0.1313  | 0.8812/0.8794 | 0.6089/0.6180 |   -4.9% | 11031 | test PR 0.1253 | best
+  2 |  0.01535/0.01526  |  0.1290/0.1443  | 0.8860/0.8833 | 0.6120/0.6228 |  -10.6% |   332 | test PR 0.1345 | best
+  3 |  0.01593/0.01583  |  0.1368/0.1466  | 0.8819/0.8755 | 0.6221/0.6337 |   -6.7% |   373 | test PR 0.1361 | best
+  4 |  0.01767/0.01759  |  0.1433/0.1543  | 0.8866/0.8819 | 0.6182/0.6303 |   -7.2% |   401 | test PR 0.1429 | best
+  5 |  0.01770/0.01759  |  0.1445/0.1525  | 0.8827/0.8801 | 0.6178/0.6265 |   -5.2% |  1887 | test PR 0.1416 |
+  6 |  0.01519/0.01509  |  0.1501/0.1610  | 0.8884/0.8833 | 0.6324/0.6396 |   -6.7% |  1925 | test PR 0.1492 | best
+  7 |  0.01702/0.01693  |  0.1502/0.1564  | 0.8859/0.8799 | 0.6211/0.6331 |   -4.0% |  2205 | test PR 0.1430 |
+  8 |  0.01499/0.01486  |  0.1485/0.1566  | 0.8811/0.8779 | 0.6214/0.6295 |   -5.2% |  3245 | test PR 0.1448 |
+  9 |  0.01402/0.01399  |  0.1571/0.1606  | 0.8928/0.8840 | 0.6199/0.6310 |   -2.2% |  2640 | test PR 0.1469 |
+stopped at epoch 9: patience (3 epochs without a gain)
+best epoch 6 (val_pr_auc 0.1610) -- weights restored; no overfitting detected
+
+OVERFITTING DIAGNOSTICS
+  best epoch ............. 6 (val PR-AUC 0.1610), weights restored
+  stopped ................ epoch 9 -- patience (3 epochs without a gain)
+  divergence begins ...... not observed
+  first flagged epoch .... none
+  gaps at best epoch ..... PR-AUC -6.7%  ROC-AUC +0.6%  bal.acc -1.1%  loss -0.7%
+  verdict ................ no overfitting detected
+  saved results/figures/2022x_step3_divergence.png
+<Figure size 1650x440 with 3 Axes>
+<Figure size 1650x440 with 3 Axes>
+[cell 15 done in 24046.3s]
+
+==============================================================================
+[cell 16/38] ox.plot_train_test_curve(
+==============================================================================
+  saved results/figures/2022x_cnn_train_test_curve.png
+<Figure size 1870x484 with 3 Axes>
+at the kept epoch 6: train PR-AUC 0.1501  test PR-AUC 0.1492  (+0.6% train over test)
+[cell 16 done in 0.8s]
+
+==============================================================================
+[cell 17/38] results = ap.evaluate_archive_final(model, loaders, bundle, tcfg, devi
+==============================================================================
+========================================================================================
+FINAL VALIDATION PASS -- every window at stride 1
+========================================================================================
+    val: 1/13,130 batches (  0.0%)  8,202 windows/s
+    val: 657/13,130 batches (  5.0%)  28,671 windows/s
+    val: 1,313/13,130 batches ( 10.0%)  28,604 windows/s
+    val: 1,969/13,130 batches ( 15.0%)  28,818 windows/s
+    val: 2,625/13,130 batches ( 20.0%)  28,907 windows/s
+    val: 3,281/13,130 batches ( 25.0%)  28,925 windows/s
+    val: 3,937/13,130 batches ( 30.0%)  28,966 windows/s
+    val: 4,593/13,130 batches ( 35.0%)  28,841 windows/s
+    val: 5,249/13,130 batches ( 40.0%)  28,651 windows/s
+    val: 5,905/13,130 batches ( 45.0%)  28,451 windows/s
+    val: 6,561/13,130 batches ( 50.0%)  28,225 windows/s
+    val: 7,217/13,130 batches ( 55.0%)  26,872 windows/s
+    val: 7,873/13,130 batches ( 60.0%)  26,030 windows/s
+    val: 8,529/13,130 batches ( 65.0%)  25,602 windows/s
+    val: 9,185/13,130 batches ( 70.0%)  25,473 windows/s
+    val: 9,841/13,130 batches ( 75.0%)  25,390 windows/s
+    val: 10,497/13,130 batches ( 79.9%)  25,183 windows/s
+    val: 11,153/13,130 batches ( 84.9%)  24,881 windows/s
+    val: 11,809/13,130 batches ( 89.9%)  24,822 windows/s
+    val: 12,465/13,130 batches ( 94.9%)  25,010 windows/s
+    val: 13,121/13,130 batches ( 99.9%)  25,225 windows/s
+  best F1 threshold .... 0.642291  (val F1 0.2505) over 53,778,473 windows
+
+========================================================================================
+TEST PASS -- every window at stride 1
+========================================================================================
+    test: 1/21,793 batches (  0.0%)  6,462 windows/s
+    test: 1,090/21,793 batches (  5.0%)  28,804 windows/s
+    test: 2,179/21,793 batches ( 10.0%)  27,613 windows/s
+    test: 3,268/21,793 batches ( 15.0%)  27,433 windows/s
+    test: 4,357/21,793 batches ( 20.0%)  26,925 windows/s
+    test: 5,446/21,793 batches ( 25.0%)  26,438 windows/s
+    test: 6,535/21,793 batches ( 30.0%)  25,715 windows/s
+    test: 7,624/21,793 batches ( 35.0%)  25,284 windows/s
+    test: 8,713/21,793 batches ( 40.0%)  25,433 windows/s
+    test: 9,802/21,793 batches ( 45.0%)  25,703 windows/s
+    test: 10,891/21,793 batches ( 50.0%)  25,853 windows/s
+    test: 11,980/21,793 batches ( 55.0%)  25,789 windows/s
+    test: 13,069/21,793 batches ( 60.0%)  25,566 windows/s
+    test: 14,158/21,793 batches ( 65.0%)  25,265 windows/s
+    test: 15,247/21,793 batches ( 70.0%)  25,293 windows/s
+    test: 16,336/21,793 batches ( 75.0%)  25,192 windows/s
+    test: 17,425/21,793 batches ( 80.0%)  25,069 windows/s
+    test: 18,514/21,793 batches ( 85.0%)  25,093 windows/s
+    test: 19,603/21,793 batches ( 90.0%)  25,171 windows/s
+    test: 20,692/21,793 batches ( 94.9%)  25,124 windows/s
+    test: 21,781/21,793 batches ( 99.9%)  25,070 windows/s
+========================================================================================
+TEST @ threshold 0.5
+========================================================================================
+  windows evaluated .... 89,261,367  (114,854 positive, base rate 0.129%)
+  PR-AUC ............... 0.1474   (a random ranker scores 0.0013)
+  ROC-AUC .............. 0.8865
+  threshold ............ 0.5000
+  precision ............ 0.1670
+  recall ............... 0.3354
+  F1 ................... 0.2229
+  confusion ............ TP 38522  FP 192207  FN 76332  TN 88954306
+========================================================================================
+TEST @ tuned threshold 0.642291
+========================================================================================
+  windows evaluated .... 89,261,367  (114,854 positive, base rate 0.129%)
+  PR-AUC ............... 0.1474   (a random ranker scores 0.0013)
+  ROC-AUC .............. 0.8865
+  threshold ............ 0.6423
+  precision ............ 0.2387
+  recall ............... 0.2512
+  F1 ................... 0.2448
+  confusion ............ TP 28848  FP 91985  FN 86006  TN 89054528
+========================================================================================
+TEST CONFUSION MATRIX @ 0.642291   (threshold 0.6423)
+========================================================================================
+                       predicted 0    predicted 1
+    actual 0       89,054,528         91,985   <- 91,985 false alarms
+    actual 1           86,006         28,848   <- 28,848 caught, 86,006 missed
+
+    TP 28,848   FP 91,985   TN 89,054,528   FN 86,006
+    precision  TP/(TP+FP) = 0.2387   (91,985 wasted call-outs per 28,848 real catches)
+    recall     TP/(TP+FN) = 0.2512   (86,006 failures went unflagged)
+    false-alarm rate FP/(FP+TN) = 0.0010
+========================================================================================
+TEST PRECISION@K -- ranking windows
+========================================================================================
+  89,261,367 items ranked, 114,854 positive (base rate 0.129%)
+       K |   hits |  precision |    best |  recall@K |     lift
+  -------+--------+------------+---------+-----------+---------
+      10 |      7 |     0.7000 |  1.0000 |    0.0001 |   544.0x
+      25 |     21 |     0.8400 |  1.0000 |    0.0002 |   652.8x
+      50 |     40 |     0.8000 |  1.0000 |    0.0003 |   621.7x
+     100 |     72 |     0.7200 |  1.0000 |    0.0006 |   559.6x
+     250 |    177 |     0.7080 |  1.0000 |    0.0015 |   550.2x
+    1000 |    664 |     0.6640 |  1.0000 |    0.0058 |   516.0x
+========================================================================================
+TEST PRECISION@K -- ranking DRIVES (each drive scored by its worst window)
+========================================================================================
+  82,609 items ranked, 3,713 positive (base rate 4.495%)
+       K |   hits |  precision |    best |  recall@K |     lift
+  -------+--------+------------+---------+-----------+---------
+      10 |      8 |     0.8000 |  1.0000 |    0.0022 |    17.8x
+      25 |     22 |     0.8800 |  1.0000 |    0.0059 |    19.6x
+      50 |     40 |     0.8000 |  1.0000 |    0.0108 |    17.8x
+     100 |     84 |     0.8400 |  1.0000 |    0.0226 |    18.7x
+     250 |    216 |     0.8640 |  1.0000 |    0.0582 |    19.2x
+    1000 |    783 |     0.7830 |  1.0000 |    0.2109 |    17.4x
+========================================================================================
+SUMMARY
+========================================================================================
+  val   @tuned           PR-AUC 0.1547 | ROC-AUC 0.8855 | P 0.2402 | R 0.2618 | F1 0.2505 | thr 0.6423 | TP 17972 FP 56834 FN 50684 TN 53652983
+  test  @0.50            PR-AUC 0.1474 | ROC-AUC 0.8865 | P 0.1670 | R 0.3354 | F1 0.2229 | thr 0.5000 | TP 38522 FP 192207 FN 76332 TN 88954306
+  test  @tuned           PR-AUC 0.1474 | ROC-AUC 0.8865 | P 0.2387 | R 0.2512 | F1 0.2448 | thr 0.6423 | TP 28848 FP 91985 FN 86006 TN 89054528
+  curves drawn from 4,000,000 of 89,261,367 test windows (uniform subsample; all printed metrics use the full pass)
+  saved results/figures/2022x_step3_evaluation.png
+<Figure size 2090x462 with 4 Axes>
+<Figure size 2090x462 with 4 Axes>
+[cell 17 done in 5869.3s]
+
+==============================================================================
+[cell 18/38] # The selected model is the 'baseline' row of the experiment log: test
+==============================================================================
+  wrote results/experiments_results.xlsx (12 runs)
+'results/experiments_results.xlsx'
+[cell 18 done in 128.7s]
+
+==============================================================================
+[cell 19/38] thr = results["best_threshold"]
+==============================================================================
+    test: 1/755 batches (  0.1%, 2s)
+    test: 76/755 batches ( 10.1%, 10s)
+    test: 151/755 batches ( 20.0%, 19s)
+    test: 226/755 batches ( 29.9%, 29s)
+    test: 301/755 batches ( 39.9%, 38s)
+    test: 376/755 batches ( 49.8%, 47s)
+    test: 451/755 batches ( 59.7%, 56s)
+    test: 526/755 batches ( 69.7%, 64s)
+    test: 601/755 batches ( 79.6%, 74s)
+    test: 676/755 batches ( 89.5%, 83s)
+    test: 751/755 batches ( 99.5%, 93s)
+
+PER-WINDOW VERDICTS -- 3,088,649 tiling windows over 82,609 test drives, threshold 0.6423
+
+  predicted FAIL ....... 5,901
+  actually  FAIL ....... 7,424
+  correct .............. 3,080,500 of 3,088,649 (99.7362% accuracy)
+  TP 2,588   FP 3,313   FN 4,836   TN 3,077,912
+  precision 0.4386   recall 0.3486
+
+  note: 'accuracy' here is dominated by the 99.760% of windows that are negative -- always saying 'no fail' would score 99.7596%.
+[cell 19 done in 94.1s]
+
+==============================================================================
+[cell 20/38] # Every window of a few drives that really failed: the verdict as the 
+==============================================================================
+
+drive 1040A00VF97G  --  36 windows covering 2022-01-01 .. 2024-12-01
+ window_in_drive window_start window_end     risk verdict   truth
+              24   2023-12-22 2024-01-20 0.003582 no fail no fail
+              25   2024-01-21 2024-02-19 0.003557 no fail no fail
+              26   2024-02-20 2024-03-20 0.002964 no fail no fail
+              27   2024-03-21 2024-04-19 0.004114 no fail no fail
+              28   2024-04-20 2024-05-19 0.002441 no fail no fail
+              29   2024-05-20 2024-06-18 0.004200 no fail no fail
+              30   2024-06-19 2024-07-18 0.003599 no fail no fail
+              31   2024-07-19 2024-08-17 0.004087 no fail no fail
+              32   2024-08-18 2024-09-16 0.002809 no fail no fail
+              33   2024-09-17 2024-10-16 0.002796 no fail no fail
+              34   2024-10-17 2024-11-15 0.004849 no fail    FAIL
+              35   2024-11-02 2024-12-01 0.003174 no fail    FAIL
+
+drive 1040A0C9F97G  --  8 windows covering 2022-01-01 .. 2022-08-01
+ window_in_drive window_start window_end     risk verdict   truth
+               0   2022-01-01 2022-01-30 0.008135 no fail no fail
+               1   2022-01-31 2022-03-01 0.008462 no fail no fail
+               2   2022-03-02 2022-03-31 0.015092 no fail no fail
+               3   2022-04-01 2022-04-30 0.010056 no fail no fail
+               4   2022-05-01 2022-05-30 0.006029 no fail no fail
+               5   2022-05-31 2022-06-29 0.007515 no fail no fail
+               6   2022-06-30 2022-07-29 0.009461 no fail    FAIL
+               7   2022-07-03 2022-08-01 0.009555 no fail    FAIL
+
+drive 1060A01CF97G  --  17 windows covering 2022-01-01 .. 2023-05-22
+ window_in_drive window_start window_end     risk verdict   truth
+               5   2022-05-31 2022-06-29 0.003271 no fail no fail
+               6   2022-06-30 2022-07-29 0.002437 no fail no fail
+               7   2022-07-30 2022-08-28 0.002710 no fail no fail
+               8   2022-08-29 2022-09-27 0.350780 no fail no fail
+               9   2022-09-28 2022-10-27 0.262646 no fail no fail
+              10   2022-10-28 2022-11-26 0.006019 no fail no fail
+              11   2022-11-27 2022-12-26 0.007756 no fail no fail
+              12   2022-12-27 2023-01-25 0.008710 no fail no fail
+              13   2023-01-26 2023-02-24 0.007926 no fail no fail
+              14   2023-02-25 2023-03-26 0.333622 no fail no fail
+              15   2023-03-27 2023-04-25 0.009188 no fail    FAIL
+              16   2023-04-23 2023-05-22 0.694040    FAIL    FAIL
+[cell 20 done in 0.0s]
+
+==============================================================================
+[cell 21/38] fig, picks = ap.plot_drive_histograms(
+==============================================================================
+  saved results/figures/2022x_step4_drive_histograms.png
+<Figure size 1980x1012 with 24 Axes>
+
+24 drives plotted, one histogram each: the distribution of that drive's 30-day windows over predicted risk.
+[cell 21 done in 3.4s]
+
+==============================================================================
+[cell 22/38] RUN_SWEEP = os.environ.get("RUN_SWEEP", "1") == "1"
+==============================================================================
+             name            dilations kernel_size hidden_dim dropout weight_decay        lr
+         baseline                                                                           
+          shallow            (1, 2, 4)                                                      
+           deeper (1, 2, 4, 8, 16, 32)                                                      
+      no_dilation      (1, 1, 1, 1, 1)                                                      
+         kernel_5                              5.0                                          
+           narrow                                        64.0                               
+             wide                                       256.0                               
+      dropout_0.3                                                 0.3                       
+weight_decay_1e-4                                                           0.0001          
+         lr_3e-03                                                                      0.003
+         lr_3e-04                                                                   0.000333
+[1/11] baseline: already in results/experiments_results.xlsx, skipped
+[2/11] shallow: already in results/experiments_results.xlsx, skipped
+[3/11] deeper: already in results/experiments_results.xlsx, skipped
+[4/11] no_dilation: already in results/experiments_results.xlsx, skipped
+[5/11] kernel_5: already in results/experiments_results.xlsx, skipped
+[6/11] narrow: already in results/experiments_results.xlsx, skipped
+[7/11] wide: already in results/experiments_results.xlsx, skipped
+[8/11] dropout_0.3: already in results/experiments_results.xlsx, skipped
+[9/11] weight_decay_1e-4: already in results/experiments_results.xlsx, skipped
+[10/11] lr_3e-03: already in results/experiments_results.xlsx, skipped
+[11/11] lr_3e-04: already in results/experiments_results.xlsx, skipped
+========================================================================================
+FULL TEST PASS -- winner 'lr_3e-03' (best val_pr_auc 0.1671), 89,261,367 windows, threshold 0.6749 from its validation run
+========================================================================================
+  wrote results/experiments_results.xlsx (12 runs)
+  full test              PR-AUC 0.1506 | ROC-AUC 0.8854 | P 0.2736 | R 0.2272 | F1 0.2482 | thr 0.6749 | TP 26098 FP 69306 FN 88756 TN 89077207
+  wrote results/experiments_results.xlsx (12 runs)
+
+BEST CNN: lr_3e-03 -- val PR-AUC 0.1671, test PR-AUC 0.1512 (stride-30 test), no overfitting detected
+[cell 22 done in 3209.9s]
+
+==============================================================================
+[cell 23/38] sweep = EXP_LOG.summary()
+==============================================================================
+SUMMARY TABLE -- ranked by validation PR-AUC; test is read, never used to choose
+
+ rank_by_val         variation  layers     dilations  kernel_size  hidden_dim  dropout     lr  parameters  best_epoch  stopped_epoch  divergence_epoch overfitting_triggered  train_pr_auc  val_pr_auc  test_pr_auc  pr_auc_gap_pct  test_roc_auc  test_bal_acc  test_f1  test_P@100_drives
+           1          lr_3e-03       5    1-2-4-8-16            3         128   0.1000 0.0030      519297          12             15              <NA>                    No        0.1561      0.1671       0.1512         -6.5932        0.8861        0.6140   0.2514             0.7900
+           2          kernel_5       5    1-2-4-8-16            5         128   0.1000 0.0010      825985          11             14                12                    No        0.1568      0.1665       0.1502         -5.8138        0.8847        0.6105   0.2436             0.8100
+           3          lr_3e-04       5    1-2-4-8-16            3         128   0.1000 0.0003      519297          15             18              <NA>                    No        0.1586      0.1640       0.1514         -3.2897        0.8860        0.6245   0.2447             0.8600
+           4            narrow       5    1-2-4-8-16            3          64   0.1000 0.0010      136769           6              9                 8                    No        0.1468      0.1618       0.1494         -9.2819        0.8877        0.6220   0.2391             0.8000
+           5          baseline       5    1-2-4-8-16            3         128   0.1000 0.0010      519297           6              9              <NA>                    No        0.1501      0.1610       0.1492         -6.7379        0.8880        0.6310   0.2424             0.8400
+           6           shallow       3         1-2-4            3         128   0.1000 0.0010      321153           6              9              <NA>                    No        0.1455      0.1598       0.1467         -8.9388        0.8870        0.6299   0.2438             0.8100
+           7            deeper       6 1-2-4-8-16-32            3         128   0.1000 0.0010      618369           6              9              <NA>                    No        0.1481      0.1596       0.1489         -7.1679        0.8885        0.6226   0.2437             0.8200
+           8              wide       5    1-2-4-8-16            3         256   0.1000 0.0010     2021633           7             10              <NA>                    No        0.1506      0.1594       0.1466         -5.5289        0.8817        0.6274   0.2419             0.8600
+           9       dropout_0.3       5    1-2-4-8-16            3         128   0.3000 0.0010      519297           9             12                 8                    No        0.1539      0.1589       0.1458         -3.1389        0.8807        0.6093   0.2373             0.8500
+          10       no_dilation       5     1-1-1-1-1            3         128   0.1000 0.0010      519297           6              9                 8                    No        0.1501      0.1581       0.1484         -5.0421        0.8876        0.6139   0.2393             0.8300
+          11 weight_decay_1e-4       5    1-2-4-8-16            3         128   0.1000 0.0010      519297           7             10              <NA>                    No        0.1436      0.1553       0.1405         -7.5295        0.8807        0.6221   0.2357             0.8200
+
+BEST MODEL: lr_3e-03  (5.0 blocks, dilations 1-2-4-8-16, kernel 3.0, width 128.0, dropout 0.1, lr 0.003)
+  best epoch 12, stopped 15, overfitting triggered: No -- no overfitting detected
+                        train      val     test  full test
+  PR-AUC               0.1561   0.1671   0.1512     0.1506
+  ROC-AUC              0.8916   0.8848   0.8861     0.8854
+  Loss                 0.0154   0.0154   0.0154     0.0155
+  Balanced accuracy    0.6066   0.6201   0.6140     0.6132
+  Accuracy             0.9982   0.9983   0.9982     0.9982
+  Precision            0.2725   0.2887   0.2790     0.2736
+  Recall               0.2139   0.2409   0.2288     0.2272
+  F1                   0.2396   0.2626   0.2514     0.2482
+
+full report: results/experiments_results.xlsx (sheet 'Best Model' first)
+  saved results/figures/2022x_step4b_variations.png
+<Figure size 1540x462 with 2 Axes>
+<Figure size 1540x462 with 2 Axes>
+[cell 23 done in 0.7s]
+
+==============================================================================
+[cell 24/38] t0 = time.time()
+==============================================================================
+    features 500,000/10,519,256 (  4.8%, 21s)
+    features 2,500,000/10,519,256 ( 23.8%, 93s)
+    features 4,500,000/10,519,256 ( 42.8%, 177s)
+    features 6,500,000/10,519,256 ( 61.8%, 282s)
+    features 8,500,000/10,519,256 ( 80.8%, 397s)
+    features 10,500,000/10,519,256 ( 99.8%, 509s)
+  feature table 10,519,256 x 138 float32 (5.8 GB), 25,254 positive (0.2401%)
+    features 500,000/1,860,545 ( 26.9%, 26s)
+  feature table 1,860,545 x 138 float32 (1.0 GB), 4,449 positive (0.2391%)
+    features 500,000/3,088,649 ( 16.2%, 26s)
+    features 2,500,000/3,088,649 ( 80.9%, 124s)
+  feature table 3,088,649 x 138 float32 (1.7 GB), 7,424 positive (0.2404%)
+
+built in 776s   train (10519256, 138)   val (1860545, 138)   test (3088649, 138)
+138 features = 46 channels x 3 aggregates (last, mean, delta)
+[cell 24 done in 776.6s]
+
+==============================================================================
+[cell 25/38] # The CNN is finished with the GPU; hand its cached blocks back before
+==============================================================================
+[0]	validation_0-logloss:0.01278	validation_0-auc:0.84749	validation_0-aucpr:0.23752	validation_1-logloss:0.01299	validation_1-auc:0.84385	validation_1-aucpr:0.23294
+[100]	validation_0-logloss:0.00877	validation_0-auc:0.93013	validation_0-aucpr:0.45186	validation_1-logloss:0.00947	validation_1-auc:0.91736	validation_1-aucpr:0.37452
+[200]	validation_0-logloss:0.00834	validation_0-auc:0.93881	validation_0-aucpr:0.49532	validation_1-logloss:0.00935	validation_1-auc:0.91957	validation_1-aucpr:0.38596
+[300]	validation_0-logloss:0.00804	validation_0-auc:0.94568	validation_0-aucpr:0.52494	validation_1-logloss:0.00930	validation_1-auc:0.92016	validation_1-aucpr:0.39020
+[400]	validation_0-logloss:0.00779	validation_0-auc:0.95087	validation_0-aucpr:0.54837	validation_1-logloss:0.00929	validation_1-auc:0.92031	validation_1-aucpr:0.39178
+[500]	validation_0-logloss:0.00754	validation_0-auc:0.95544	validation_0-aucpr:0.57068	validation_1-logloss:0.00928	validation_1-auc:0.92045	validation_1-aucpr:0.39295
+[569]	validation_0-logloss:0.00739	validation_0-auc:0.95825	validation_0-aucpr:0.58327	validation_1-logloss:0.00928	validation_1-auc:0.92034	validation_1-aucpr:0.39289
+
+best iteration 469 of 3000 (val PR-AUC 0.3932)  --  312s on cuda
+[cell 25 done in 312.7s]
+
+==============================================================================
+[cell 26/38] # Predict on the CPU: the tables are NumPy arrays in host memory, and 
+==============================================================================
+threshold tuned on validation: 0.2172  (val F1 0.4408)
+
+  val   @tuned           PR-AUC 0.3932 | ROC-AUC 0.9205 | P 0.4900 | R 0.4005 | F1 0.4408 | thr 0.2172 | TP 1782 FP 1855 FN 2667 TN 1854241
+  test  @0.50            PR-AUC 0.3875 | ROC-AUC 0.9186 | P 0.6992 | R 0.2411 | F1 0.3586 | thr 0.5000 | TP 1790 FP 770 FN 5634 TN 3080455
+  test  @tuned           PR-AUC 0.3875 | ROC-AUC 0.9186 | P 0.4950 | R 0.3968 | F1 0.4405 | thr 0.2172 | TP 2946 FP 3006 FN 4478 TN 3078219
+
+========================================================================================
+XGBOOST TEST PRECISION@K -- ranking windows
+========================================================================================
+  3,088,649 items ranked, 7,424 positive (base rate 0.240%)
+       K |   hits |  precision |    best |  recall@K |     lift
+  -------+--------+------------+---------+-----------+---------
+      10 |     10 |     1.0000 |  1.0000 |    0.0013 |   416.0x
+      25 |     24 |     0.9600 |  1.0000 |    0.0032 |   399.4x
+      50 |     49 |     0.9800 |  1.0000 |    0.0066 |   407.7x
+     100 |     98 |     0.9800 |  1.0000 |    0.0132 |   407.7x
+     250 |    232 |     0.9280 |  1.0000 |    0.0312 |   386.1x
+    1000 |    857 |     0.8570 |  1.0000 |    0.1154 |   356.5x
+========================================================================================
+XGBOOST TEST PRECISION@K -- ranking DRIVES (each by its worst window)
+========================================================================================
+  82,609 items ranked, 3,713 positive (base rate 4.495%)
+       K |   hits |  precision |    best |  recall@K |     lift
+  -------+--------+------------+---------+-----------+---------
+      10 |     10 |     1.0000 |  1.0000 |    0.0027 |    22.2x
+      25 |     24 |     0.9600 |  1.0000 |    0.0065 |    21.4x
+      50 |     49 |     0.9800 |  1.0000 |    0.0132 |    21.8x
+     100 |     99 |     0.9900 |  1.0000 |    0.0267 |    22.0x
+     250 |    241 |     0.9640 |  1.0000 |    0.0649 |    21.4x
+    1000 |    921 |     0.9210 |  1.0000 |    0.2480 |    20.5x
+
+what XGBoost relies on most (share of total gain):
+                   feature      gain
+1   smart_197_raw_d7__last  0.365464
+2     smart_5_raw_d1__last  0.151739
+3       smart_5_raw__delta  0.044702
+4   smart_197_raw_d7__mean  0.039978
+5     smart_5_raw_d7__mean  0.037540
+6     smart_4_raw_d1__mean  0.019799
+7      smart_197_raw__mean  0.017686
+8        smart_5_raw__mean  0.016566
+9           observed__mean  0.013565
+10   smart_12_raw_d1__mean  0.013233
+11    smart_5_raw_d7__last  0.011221
+12  smart_198_raw_d7__last  0.010156
+13    smart_4_raw_d1__last  0.009836
+14    smart_4_raw_d7__last  0.009310
+15          observed__last  0.008020
+[cell 26 done in 8.6s]
+
+==============================================================================
+[cell 27/38] # XGBoost through the same overfitting rule, with a boosting round in 
+==============================================================================
+  wrote results/experiments_results.xlsx (12 runs)
+XGBOOST OVERFITTING DIAGNOSTICS -- best round 470, early_stopping_rounds (100 without a val PR-AUC gain)
+  divergence begins ...... round 471
+  gaps at best round ..... PR-AUC +43.4%  ROC-AUC +3.6%  loss +21.7%
+  verdict ................ overfit at best epoch (gap over limit)
+  saved results/figures/2022x_step5_xgboost_divergence.png
+<Figure size 1650x440 with 3 Axes>
+[cell 27 done in 8.0s]
+
+==============================================================================
+[cell 28/38] # `pred` holds the CNN's score for exactly these tiling windows (§4). 
+==============================================================================
+CNN vs XGBOOST -- the same 3,088,649 tiling test windows over 82,609 test drives
+(base rate 0.240% of windows; each model at its own validation-tuned threshold)
+
+         PR-AUC  ROC-AUC  threshold  precision  recall     F1    TP    FP    FN
+model                                                                          
+CNN      0.3248   0.9062     0.6423     0.4386  0.3486 0.3884  2588  3313  4836
+XGBoost  0.3875   0.9186     0.2172     0.4950  0.3968 0.4405  2946  3006  4478
+
+Precision@K -- of the K drives (or windows) each model flags first, how many really failed:
+
+   K  CNN drive hits  XGBoost drive hits  CNN drive precision  XGBoost drive precision  CNN window precision  XGBoost window precision
+  10               9                  10               0.9000                   1.0000                0.9000                    1.0000
+  25              22                  24               0.8800                   0.9600                0.8800                    0.9600
+  50              44                  49               0.8800                   0.9800                0.8600                    0.9800
+ 100              93                  99               0.9300                   0.9900                0.9000                    0.9800
+ 250             230                 241               0.9200                   0.9640                0.8840                    0.9280
+1000             853                 921               0.8530                   0.9210                0.7700                    0.8570
+[cell 28 done in 2.7s]
+
+==============================================================================
+[cell 29/38] from sklearn.metrics import precision_recall_curve
+==============================================================================
+  saved results/figures/2022x_step5_cnn_vs_xgboost.png
+<Figure size 1430x462 with 2 Axes>
+289298
+[cell 29 done in 13.9s]
+
+==============================================================================
+[cell 30/38] import dataclasses
+==============================================================================
+              name        arch n_layers hidden_dim      lr
+        tf_summary                                        
+          tf_plain transformer                            
+tf_summary_6layers                  6.0                   
+tf_summary_width64                            64.0        
+tf_summary_lr3e-04                                  0.0003
+
+tf_summary: input (2, 30, 46) -> (2, 1), 656,641 parameters (the CNN has 519,297)
+
+[1/5] tf_summary: search winner, unchanged
+========================================================================================
+TRAINING -- 656,641 parameters, up to 20 epochs; early stop on val_pr_auc (max), patience 3, min_delta 0.001
+  overfit rule: gap > {'pr_auc': 15.0, 'roc_auc': 3.0, 'bal_acc': 10.0, 'loss': 25.0} (percent), stops the run
+  train probe 1,805,461 windows / 49,566 drives / 2,338 positive  vs  val 1,811,777 windows / 49,566 drives / 2,308 positive
+========================================================================================
+ ep |       loss tr/val |   PR-AUC tr/val |    ROC tr/val | balacc tr/val |  PR gap |   sec |
+  1 |  0.01651/0.01635  |  0.1266/0.1404  | 0.8786/0.8739 | 0.6215/0.6246 |   -9.8% |  1588 | best
+  2 |  0.01312/0.01305  |  0.1319/0.1443  | 0.8827/0.8798 | 0.6118/0.6154 |   -8.6% |  1316 | best
+  3 |  0.01218/0.01207  |  0.1361/0.1432  | 0.8838/0.8781 | 0.6052/0.6083 |   -5.0% |  1214 |
+  4 |  0.01577/0.01567  |  0.1436/0.1505  | 0.8871/0.8809 | 0.6218/0.6258 |   -4.6% |  1004 | best
+  5 |  0.01709/0.01700  |  0.1383/0.1459  | 0.8857/0.8812 | 0.6214/0.6240 |   -5.2% |   970 |
+  6 |  0.01548/0.01531  |  0.1407/0.1490  | 0.8876/0.8834 | 0.6298/0.6327 |   -5.6% |  1032 |
+  7 |  0.01536/0.01527  |  0.1469/0.1508  | 0.8894/0.8839 | 0.6216/0.6254 |   -2.6% |   983 |
+stopped at epoch 7: patience (3 epochs without a gain)
+best epoch 4 (val_pr_auc 0.1505) -- weights restored; no overfitting detected
+  wrote results/experiments_results.xlsx (13 runs)
+  saved results/figures\divergence_tf_summary.png
+
+[2/5] tf_plain: {'arch': 'transformer'}
+========================================================================================
+TRAINING -- 637,953 parameters, up to 20 epochs; early stop on val_pr_auc (max), patience 3, min_delta 0.001
+  overfit rule: gap > {'pr_auc': 15.0, 'roc_auc': 3.0, 'bal_acc': 10.0, 'loss': 25.0} (percent), stops the run
+  train probe 1,805,461 windows / 49,566 drives / 2,338 positive  vs  val 1,811,777 windows / 49,566 drives / 2,308 positive
+========================================================================================
+ ep |       loss tr/val |   PR-AUC tr/val |    ROC tr/val | balacc tr/val |  PR gap |   sec |
+  1 |  0.01660/0.01640  |  0.1316/0.1412  | 0.8700/0.8694 | 0.6287/0.6328 |   -6.8% |  4305 | best
+  2 |  0.01335/0.01325  |  0.1330/0.1441  | 0.8795/0.8780 | 0.6111/0.6161 |   -7.7% |  4386 | best
+  3 |  0.01298/0.01286  |  0.1382/0.1438  | 0.8814/0.8797 | 0.6181/0.6234 |   -3.9% |  4133 |
+  4 |  0.01634/0.01616  |  0.1409/0.1469  | 0.8825/0.8772 | 0.6158/0.6156 |   -4.1% |  3338 | best
+  5 |  0.01670/0.01655  |  0.1368/0.1442  | 0.8842/0.8814 | 0.6097/0.6144 |   -5.2% |  3028 |
+  6 |  0.01452/0.01434  |  0.1414/0.1503  | 0.8853/0.8816 | 0.6178/0.6198 |   -5.9% |  3025 | best
+  7 |  0.01645/0.01630  |  0.1405/0.1448  | 0.8856/0.8816 | 0.6286/0.6320 |   -2.9% |  3052 |
+  8 |  0.01307/0.01290  |  0.1410/0.1498  | 0.8835/0.8803 | 0.6175/0.6215 |   -5.9% |  2508 |
+  9 |  0.01297/0.01287  |  0.1425/0.1496  | 0.8881/0.8816 | 0.6190/0.6234 |   -4.7% |   791 |
+stopped at epoch 9: patience (3 epochs without a gain)
+best epoch 6 (val_pr_auc 0.1503) -- weights restored; no overfitting detected
+  wrote results/experiments_results.xlsx (14 runs)
+  saved results/figures\divergence_tf_plain.png
+
+[3/5] tf_summary_6layers: {'n_layers': 6}
+========================================================================================
+TRAINING -- 1,251,457 parameters, up to 20 epochs; early stop on val_pr_auc (max), patience 3, min_delta 0.001
+  overfit rule: gap > {'pr_auc': 15.0, 'roc_auc': 3.0, 'bal_acc': 10.0, 'loss': 25.0} (percent), stops the run
+  train probe 1,805,461 windows / 49,566 drives / 2,338 positive  vs  val 1,811,777 windows / 49,566 drives / 2,308 positive
+========================================================================================
+ ep |       loss tr/val |   PR-AUC tr/val |    ROC tr/val | balacc tr/val |  PR gap |   sec |
+  1 |  0.01812/0.01790  |  0.1267/0.1419  | 0.8775/0.8731 | 0.6143/0.6180 |  -10.7% |  4064 | best
+  2 |  0.01462/0.01452  |  0.1343/0.1453  | 0.8838/0.8807 | 0.6014/0.6060 |   -7.6% |  3325 | best
+  3 |  0.01335/0.01323  |  0.1397/0.1463  | 0.8829/0.8776 | 0.6239/0.6279 |   -4.5% |  2829 |
+  4 |  0.01653/0.01637  |  0.1465/0.1515  | 0.8852/0.8808 | 0.6216/0.6249 |   -3.3% |  2621 | best
+  5 |  0.01668/0.01659  |  0.1453/0.1470  | 0.8868/0.8823 | 0.6146/0.6144 |   -1.1% |  1980 |
+  6 |  0.01562/0.01556  |  0.1452/0.1476  | 0.8888/0.8842 | 0.6114/0.6142 |   -1.6% |  1886 |
+  7 |  0.01543/0.01532  |  0.1523/0.1505  | 0.8885/0.8833 | 0.6293/0.6275 |   +1.1% |  1875 |
+stopped at epoch 7: patience (3 epochs without a gain)
+best epoch 4 (val_pr_auc 0.1515) -- weights restored; no overfitting detected
+  wrote results/experiments_results.xlsx (15 runs)
+  saved results/figures\divergence_tf_summary_6layers.png
+
+[4/5] tf_summary_width64: {'hidden_dim': 64}
+========================================================================================
+TRAINING -- 172,673 parameters, up to 20 epochs; early stop on val_pr_auc (max), patience 3, min_delta 0.001
+  overfit rule: gap > {'pr_auc': 15.0, 'roc_auc': 3.0, 'bal_acc': 10.0, 'loss': 25.0} (percent), stops the run
+  train probe 1,805,461 windows / 49,566 drives / 2,338 positive  vs  val 1,811,777 windows / 49,566 drives / 2,308 positive
+========================================================================================
+ ep |       loss tr/val |   PR-AUC tr/val |    ROC tr/val | balacc tr/val |  PR gap |   sec |
+  1 |  0.01341/0.01324  |  0.1231/0.1302  | 0.8771/0.8743 | 0.6087/0.6154 |   -5.5% |   270 | best
+  2 |  0.01262/0.01253  |  0.1304/0.1392  | 0.8838/0.8811 | 0.6118/0.6143 |   -6.3% |   239 | best
+  3 |  0.01362/0.01349  |  0.1402/0.1464  | 0.8828/0.8783 | 0.5937/0.6047 |   -4.2% |   203 | best
+  4 |  0.01489/0.01476  |  0.1459/0.1494  | 0.8857/0.8798 | 0.6135/0.6166 |   -2.4% |   185 | best
+  5 |  0.01837/0.01819  |  0.1356/0.1407  | 0.8882/0.8829 | 0.6188/0.6186 |   -3.6% |   199 |
+  6 |  0.01374/0.01361  |  0.1470/0.1532  | 0.8893/0.8850 | 0.6167/0.6226 |   -4.1% |   187 | best
+  7 |  0.01580/0.01563  |  0.1529/0.1541  | 0.8888/0.8841 | 0.6227/0.6277 |   -0.7% |   233 |
+  8 |  0.01238/0.01225  |  0.1554/0.1570  | 0.8885/0.8853 | 0.6212/0.6235 |   -1.0% |   206 | best
+  9 |  0.01409/0.01398  |  0.1401/0.1431  | 0.8892/0.8845 | 0.6135/0.6217 |   -2.1% |   248 |
+ 10 |  0.01515/0.01505  |  0.1464/0.1515  | 0.8894/0.8843 | 0.6229/0.6299 |   -3.4% |   231 |
+ 11 |  0.01239/0.01230  |  0.1522/0.1590  | 0.8902/0.8859 | 0.6280/0.6331 |   -4.3% |   249 | best
+ 12 |  0.01463/0.01452  |  0.1533/0.1594  | 0.8908/0.8873 | 0.6244/0.6303 |   -3.8% |   183 |
+ 13 |  0.01430/0.01422  |  0.1574/0.1593  | 0.8904/0.8861 | 0.6218/0.6288 |   -1.2% |   168 |
+ 14 |  0.01340/0.01335  |  0.1518/0.1555  | 0.8899/0.8857 | 0.6057/0.6138 |   -2.4% |   162 |
+stopped at epoch 14: patience (3 epochs without a gain)
+best epoch 11 (val_pr_auc 0.1590) -- weights restored; early divergence after best epoch (gaps within limits)
+train and validation diverge from epoch 13
+  wrote results/experiments_results.xlsx (16 runs)
+  saved results/figures\divergence_tf_summary_width64.png
+
+[5/5] tf_summary_lr3e-04: {'lr': 0.0003}
+========================================================================================
+TRAINING -- 656,641 parameters, up to 20 epochs; early stop on val_pr_auc (max), patience 3, min_delta 0.001
+  overfit rule: gap > {'pr_auc': 15.0, 'roc_auc': 3.0, 'bal_acc': 10.0, 'loss': 25.0} (percent), stops the run
+  train probe 1,805,461 windows / 49,566 drives / 2,338 positive  vs  val 1,811,777 windows / 49,566 drives / 2,308 positive
+========================================================================================
+ ep |       loss tr/val |   PR-AUC tr/val |    ROC tr/val | balacc tr/val |  PR gap |   sec |
+  1 |  0.01381/0.01364  |  0.1183/0.1321  | 0.8788/0.8774 | 0.6060/0.6076 |  -10.4% |  1114 | best
+  2 |  0.01452/0.01441  |  0.1249/0.1357  | 0.8823/0.8805 | 0.6159/0.6220 |   -7.9% |  1066 | best
+  3 |  0.01545/0.01531  |  0.1344/0.1465  | 0.8831/0.8801 | 0.6107/0.6178 |   -8.2% |  1054 | best
+  4 |  0.01639/0.01622  |  0.1411/0.1522  | 0.8849/0.8801 | 0.6073/0.6135 |   -7.3% |  1050 | best
+  5 |  0.01506/0.01492  |  0.1400/0.1485  | 0.8870/0.8844 | 0.6232/0.6273 |   -5.8% |  1044 |
+  6 |  0.01447/0.01434  |  0.1448/0.1565  | 0.8887/0.8847 | 0.6091/0.6189 |   -7.5% |  1073 | best
+  7 |  0.01493/0.01478  |  0.1462/0.1505  | 0.8873/0.8830 | 0.6324/0.6376 |   -2.8% |  1039 |
+  8 |  0.01492/0.01479  |  0.1483/0.1537  | 0.8874/0.8836 | 0.6231/0.6286 |   -3.5% |  1053 |
+  9 |  0.01403/0.01393  |  0.1454/0.1511  | 0.8904/0.8848 | 0.6241/0.6297 |   -3.8% |  1057 |
+stopped at epoch 9: patience (3 epochs without a gain)
+best epoch 6 (val_pr_auc 0.1565) -- weights restored; early divergence after best epoch (gaps within limits)
+train and validation diverge from epoch 5
+  wrote results/experiments_results.xlsx (17 runs)
+  saved results/figures\divergence_tf_summary_lr3e-04.png
+  wrote results/experiments_results.xlsx (17 runs)
+
+BEST TRANSFORMER: tf_summary_width64 -- val PR-AUC 0.1590, test PR-AUC 0.1483 (stride-30 test), early divergence after best epoch (gaps within limits)
+[cell 30 done in 71410.0s]
+
+==============================================================================
+[cell 31/38] # CNN and transformer runs on the stride-30 windows every one of them 
+==============================================================================
+CNN + TRANSFORMER RUNS -- stride-30 windows, ranked by validation PR-AUC
+
+         variation  model_type  layers  hidden_dim  parameters  best_epoch  stopped_epoch overfitting_triggered  train_pr_auc  val_pr_auc  test_pr_auc  pr_auc_gap_pct  test_roc_auc  test_f1  test_P@100_drives
+          lr_3e-03         cnn       5         128      519297          12             15                    No        0.1561      0.1671       0.1512         -6.5932        0.8861   0.2514             0.7900
+          kernel_5         cnn       5         128      825985          11             14                    No        0.1568      0.1665       0.1502         -5.8138        0.8847   0.2436             0.8100
+          lr_3e-04         cnn       5         128      519297          15             18                    No        0.1586      0.1640       0.1514         -3.2897        0.8860   0.2447             0.8600
+            narrow         cnn       5          64      136769           6              9                    No        0.1468      0.1618       0.1494         -9.2819        0.8877   0.2391             0.8000
+          baseline         cnn       5         128      519297           6              9                    No        0.1501      0.1610       0.1492         -6.7379        0.8880   0.2424             0.8400
+           shallow         cnn       3         128      321153           6              9                    No        0.1455      0.1598       0.1467         -8.9388        0.8870   0.2438             0.8100
+            deeper         cnn       6         128      618369           6              9                    No        0.1481      0.1596       0.1489         -7.1679        0.8885   0.2437             0.8200
+              wide         cnn       5         256     2021633           7             10                    No        0.1506      0.1594       0.1466         -5.5289        0.8817   0.2419             0.8600
+tf_summary_width64 transformer       3          64      172673          11             14                    No        0.1522      0.1590       0.1483         -4.2645        0.8874   0.2490             0.8200
+       dropout_0.3         cnn       5         128      519297           9             12                    No        0.1539      0.1589       0.1458         -3.1389        0.8807   0.2373             0.8500
+       no_dilation         cnn       5         128      519297           6              9                    No        0.1501      0.1581       0.1484         -5.0421        0.8876   0.2393             0.8300
+tf_summary_lr3e-04 transformer       3         128      656641           6              9                    No        0.1448      0.1565       0.1490         -7.5188        0.8877   0.2422             0.8500
+ weight_decay_1e-4         cnn       5         128      519297           7             10                    No        0.1436      0.1553       0.1405         -7.5295        0.8807   0.2357             0.8200
+tf_summary_6layers transformer       6         128     1251457           4              7                    No        0.1465      0.1515       0.1460         -3.2823        0.8842   0.2393             0.8700
+        tf_summary transformer       3         128      656641           4              7                    No        0.1436      0.1505       0.1454         -4.5593        0.8850   0.2407             0.8500
+          tf_plain transformer       3         128      637953           6              9                    No        0.1414      0.1503       0.1422         -5.8966        0.8822   0.2438             0.8100
+
+best transformer: tf_summary_width64  val PR-AUC 0.1590  test PR-AUC 0.1483
+best CNN:         lr_3e-03  val PR-AUC 0.1671  test PR-AUC 0.1512
+  -> transformer -4.9% on validation, -1.9% on test
+  saved results/figures/2022x_step5b_transformer_variations.png
+<Figure size 1540x462 with 2 Axes>
+<Figure size 1540x462 with 2 Axes>
+[cell 31 done in 1.5s]
+
+==============================================================================
+[cell 32/38] # The transformer winner on the same tiling windows as the CNN and XGB
+==============================================================================
+CNN vs XGBOOST vs TRANSFORMER -- the same 3,088,649 tiling test windows
+
+                                  PR-AUC  ROC-AUC  threshold  precision  recall     F1    TP    FP    FN
+model                                                                                                   
+CNN                               0.3248   0.9062     0.6423     0.4386  0.3486 0.3884  2588  3313  4836
+XGBoost                           0.3875   0.9186     0.2172     0.4950  0.3968 0.4405  2946  3006  4478
+Transformer (tf_summary_width64)  0.3162   0.9050     0.5208     0.4072  0.3761 0.3910  2792  4064  4632
+
+drive precision @K:
+   K  CNN drive precision  XGBoost drive precision  Transformer drive precision
+  10               0.9000                   1.0000                       0.8000
+  25               0.8800                   0.9600                       0.8000
+  50               0.8800                   0.9800                       0.8600
+ 100               0.9300                   0.9900                       0.8600
+ 250               0.9200                   0.9640                       0.8760
+1000               0.8530                   0.9210                       0.8430
+
+transformer vs CNN: PR-AUC 0.3162 vs 0.3248 (-2.6%), drive P@100 0.86 vs 0.93
+<Figure size 1430x462 with 2 Axes>
+[cell 32 done in 196.3s]
+
+==============================================================================
+[cell 33/38] TREE_DEPTH = 8
+==============================================================================
+  depth    2 -> actual   2,         4 leaves | train acc 0.997674 (bal 0.5285) | test acc 0.997675 (bal 0.5289) | 226s
+  depth    4 -> actual   4,        16 leaves | train acc 0.997777 (bal 0.5552) | test acc 0.997766 (bal 0.5538) | 396s
+  depth    6 -> actual   6,        64 leaves | train acc 0.997854 (bal 0.5953) | test acc 0.997834 (bal 0.5931) | 577s
+  depth    8 -> actual   8,       232 leaves | train acc 0.997925 (bal 0.6065) | test acc 0.997805 (bal 0.5936) | 767s
+
+ max_depth  actual_depth  leaves  train_accuracy  test_accuracy  train_balanced_acc  test_balanced_acc  fit_seconds
+         2             2       4        0.997674       0.997675            0.528539           0.528862   226.156312
+         4             4      16        0.997777       0.997766            0.555234           0.553834   395.964329
+         6             6      64        0.997854       0.997834            0.595348           0.593106   577.034097
+         8             8     232        0.997925       0.997805            0.606543           0.593628   767.136093
+[cell 33 done in 1966.6s]
+
+==============================================================================
+[cell 34/38] final = ladder.iloc[-1]
+==============================================================================
+FINAL TREE -- max_depth 8 (actual 8.0), 232.0 leaves, min_samples_leaf=1
+  training accuracy .... 0.99792533
+  test accuracy ........ 0.99780454
+  training balanced .... 0.6065
+  test balanced ........ 0.5936
+
+  both ACCURACY columns sit at the 'never fails' baseline (99.760%) -- they say nothing here;
+  the BALANCED columns (0.607 train vs 0.594 test) are the read, and the gap between
+  them is how much of the depth-8 tree is fitted to training drives rather than to failure.
+
+what the tree splits on most:
+                    feature  importance
+1    smart_197_raw_d7__last    0.308027
+2      smart_5_raw_d1__last    0.157676
+3    smart_198_raw_d1__mean    0.070251
+4    smart_197_raw_d7__mean    0.053191
+5      smart_4_raw_d7__last    0.050727
+6            observed__mean    0.038850
+7         smart_5_raw__last    0.033659
+8      smart_5_raw_d7__mean    0.029419
+9        smart_5_raw__delta    0.027036
+10      smart_198_raw__last    0.020532
+11  smart_193_raw_d7__delta    0.019983
+12    smart_12_raw_d7__last    0.016630
+13   smart_193_raw_d7__last    0.015143
+14     smart_5_raw_d1__mean    0.014772
+15     smart_4_raw_d1__last    0.013958
+[cell 34 done in 0.0s]
+
+==============================================================================
+[cell 35/38] fig, axes = plt.subplots(1, 2, figsize=(13, 4.2))
+==============================================================================
+  saved results/figures/2022x_step6_tree_depth.png
+<Figure size 1430x462 with 2 Axes>
+[cell 35 done in 0.6s]
+
+==============================================================================
+[cell 36/38] os.makedirs("models", exist_ok=True); os.makedirs("results", exist_ok=
+==============================================================================
+Saved models/backblaze_2022x_w30_cnn.pth and models/backblaze_2022x_w30_preprocessing_config.json
+Saved models/backblaze_2022x_w30_xgb.json and its config
+wrote results/w2022x_*.csv and results/w2022x_summary.json
+  wrote results/experiments_results.xlsx (17 runs)
+'results/experiments_results.xlsx'
+[cell 36 done in 24.7s]
+
+==============================================================================
+[cell 37/38] p_tree = tree.predict_proba(Xte)[:, 1]
+==============================================================================
+========================================================================================
+SUMMARY -- 3,088,649 test windows over 82,609 test drives (3,713 failed; window base rate 0.240%)
+========================================================================================
+                                  drive precision @100  drives hit @100  drives hit @1000  PR-AUC  ROC-AUC  precision  recall     F1  threshold
+model                                                                                                                                          
+CNN                                             0.9300               93               853  0.3248   0.9062     0.4386  0.3486 0.3884     0.6423
+XGBoost                                         0.9900               99               921  0.3875   0.9186     0.4950  0.3968 0.4405     0.2172
+Transformer (tf_summary_width64)                0.8600               86               843  0.3162   0.9050     0.4072  0.3761 0.3910     0.5208
+Decision tree (depth 8)                         0.8500               85               877  0.2815   0.8199     0.6485  0.1894 0.2932     0.5000
+
+  best at flagging drives (precision @100) ... XGBoost (0.9900, next best CNN at 0.9300)
+  best ranking overall (PR-AUC) ............. XGBoost (0.3875, next best CNN at 0.3248)
+
+  for reference, not comparable to the table: the CNN on every stride-1 test window (§4) scored
+  PR-AUC 0.1474 over 89,261,367 overlapping windows.
+
+wrote results/w2022x_model_summary.csv
+[cell 37 done in 2.2s]
+
+==============================================================================
+[cell 38/38] rows = []
+==============================================================================
+  shallow                      cnn          val PR-AUC 0.3433  test PR-AUC 0.3220  drive P@100 0.94  (103s)
+  deeper                       cnn          val PR-AUC 0.3428  test PR-AUC 0.3225  drive P@100 0.92  (135s)
+  no_dilation                  cnn          val PR-AUC 0.3409  test PR-AUC 0.3214  drive P@100 0.92  (133s)
+  kernel_5                     cnn          val PR-AUC 0.3513  test PR-AUC 0.3255  drive P@100 0.93  (130s)
+  narrow                       cnn          val PR-AUC 0.3408  test PR-AUC 0.3208  drive P@100 0.93  (86s)
+  wide                         cnn          val PR-AUC 0.3416  test PR-AUC 0.3168  drive P@100 0.94  (96s)
+  dropout_0.3                  cnn          val PR-AUC 0.3423  test PR-AUC 0.3201  drive P@100 0.91  (76s)
+  weight_decay_1e-4            cnn          val PR-AUC 0.3350  test PR-AUC 0.3101  drive P@100 0.92  (74s)
+  lr_3e-03                     cnn          val PR-AUC 0.3513  test PR-AUC 0.3293  drive P@100 0.92  (74s)
+  lr_3e-04                     cnn          val PR-AUC 0.3501  test PR-AUC 0.3293  drive P@100 0.92  (76s)
+  baseline                     cnn          val PR-AUC 0.3452  test PR-AUC 0.3248  drive P@100 0.93  (75s)
+  tf_summary                   transformer  val PR-AUC 0.3283  test PR-AUC 0.3142  drive P@100 0.91  (81s)
+  tf_plain                     transformer  val PR-AUC 0.3231  test PR-AUC 0.3079  drive P@100 0.93  (105s)
+  tf_summary_6layers           transformer  val PR-AUC 0.3321  test PR-AUC 0.3140  drive P@100 0.92  (136s)
+  tf_summary_width64           transformer  val PR-AUC 0.3372  test PR-AUC 0.3162  drive P@100 0.86  (104s)
+  tf_summary_lr3e-04           transformer  val PR-AUC 0.3282  test PR-AUC 0.3127  drive P@100 0.91  (109s)
+ rank                   model      family family_winner  drive_P@100  drive_P@1000  test_pr_auc  test_roc_auc  val_pr_auc     f1
+    1                 XGBoost     xgboost           Yes       0.9900        0.9210       0.3875        0.9186      0.3932 0.4405
+    2                 shallow         cnn                     0.9400        0.8570       0.3220        0.9048      0.3433 0.3924
+    3                    wide         cnn                     0.9400        0.8600       0.3168        0.9017      0.3416 0.3858
+    4                kernel_5         cnn                     0.9300        0.8570       0.3255        0.9040      0.3513 0.3918
+    5                baseline         cnn                     0.9300        0.8530       0.3248        0.9062      0.3452 0.3912
+    6                  narrow         cnn                     0.9300        0.8580       0.3208        0.9057      0.3408 0.3832
+    7                tf_plain transformer                     0.9300        0.8560       0.3079        0.9011      0.3231 0.3841
+    8                lr_3e-03         cnn           Yes       0.9200        0.8600       0.3293        0.9045      0.3513 0.3965
+    9                lr_3e-04         cnn                     0.9200        0.8590       0.3293        0.9055      0.3501 0.3942
+   10                  deeper         cnn                     0.9200        0.8620       0.3225        0.9065      0.3428 0.3850
+   11             no_dilation         cnn                     0.9200        0.8570       0.3214        0.9058      0.3409 0.3851
+   12      tf_summary_6layers transformer                     0.9200        0.8550       0.3140        0.9023      0.3321 0.3824
+   13       weight_decay_1e-4         cnn                     0.9200        0.8600       0.3101        0.9003      0.3350 0.3823
+   14             dropout_0.3         cnn                     0.9100        0.8470       0.3201        0.9010      0.3423 0.3836
+   15              tf_summary transformer                     0.9100        0.8540       0.3142        0.9031      0.3283 0.3854
+   16      tf_summary_lr3e-04 transformer                     0.9100        0.8590       0.3127        0.9052      0.3282 0.3808
+   17      tf_summary_width64 transformer           Yes       0.8600        0.8430       0.3162        0.9050      0.3372 0.3910
+   18 Decision tree (depth 8)        tree           Yes       0.8500        0.8770       0.2815        0.8199         NaN 0.2932
+resumed results/experiments_results.xlsx: ['shallow', 'deeper', 'no_dilation', 'kernel_5', 'narrow', 'wide', 'dropout_0.3', 'weight_decay_1e-4', 'lr_3e-03', 'lr_3e-04', 'baseline', 'xgboost', 'tf_summary', 'tf_plain', 'tf_summary_6layers', 'tf_summary_width64', 'tf_summary_lr3e-04']
+  wrote results/model_comparison.xlsx
+'results/model_comparison.xlsx'
+[cell 38 done in 1601.9s]
+ERROR:tornado.general:Uncaught exception in ZMQStream callback
+Traceback (most recent call last):
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\ipykernel\iostream.py", line 217, in _event_pipe
+    event_pipe = self._local.event_pipe
+                 ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: '_thread._local' object has no attribute 'event_pipe'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\zmq\eventloop\zmqstream.py", line 566, in _log_error
+    f.result()
+    ~~~~~~~~^^
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\ipykernel\kernelbase.py", line 348, in dispatch_control
+    await self.process_control(msg)
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\ipykernel\kernelbase.py", line 365, in process_control
+    self._publish_status("busy", "control")
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\ipykernel\kernelbase.py", line 651, in _publish_status
+    self.session.send(
+    ~~~~~~~~~~~~~~~~~^
+        self.iopub_socket,
+        ^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        ident=self._topic("status"),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\jupyter_client\session.py", line 867, in send
+    stream.send_multipart(to_send, copy=copy)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\ipykernel\iostream.py", line 433, in send_multipart
+    return self.io_thread.send_multipart(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\ipykernel\iostream.py", line 351, in send_multipart
+    self.schedule(lambda: self._really_send(*args, **kwargs))
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\ipykernel\iostream.py", line 342, in schedule
+    self._event_pipe.send(b"")
+    ^^^^^^^^^^^^^^^^
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\ipykernel\iostream.py", line 221, in _event_pipe
+    event_pipe = ctx.socket(zmq.PUSH)
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\zmq\sugar\context.py", line 352, in socket
+    socket_class(  # set PYTHONTRACEMALLOC=2 to get the calling frame
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        self, socket_type, **kwargs
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\tempuser2\Desktop\XGBOOST_2.0\XGBOOST\.venv\Lib\site-packages\zmq\sugar\socket.py", line 164, in __init__
+    super().__init__(
+    ~~~~~~~~~~~~~~~~^
+        ctx_or_socket,
+        ^^^^^^^^^^^^^^
+    ...<2 lines>...
+        copy_threshold=copy_threshold,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "zmq/backend/cython/_zmq.py", line 740, in zmq.backend.cython._zmq.Socket.__init__
+    raise ZMQError()
+    
+zmq.error.ZMQError: Permission denied
+
+wrote Dataset_backblaze_Analysis_2022_XGBoost.ipynb -- total 110130.1s
+NOTEBOOK EXIT 0 at Tue Oct 13 19:43:50 JDT 2026

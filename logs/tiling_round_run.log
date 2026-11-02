@@ -1,0 +1,79 @@
+resumed results\experiments_results.xlsx: ['shallow', 'deeper', 'no_dilation', 'kernel_5', 'narrow', 'wide', 'dropout_0.3', 'weight_decay_1e-4', 'lr_3e-03', 'lr_3e-04', 'baseline', 'xgboost', 'tf_summary', 'tf_plain', 'tf_summary_6layers', 'tf_summary_width64', 'tf_summary_lr3e-04']
+
+[1/2] tf_channel_tiling: {'arch': 'channel_transformer', 'hidden_dim': 128, 'n_layers': 3, 'n_heads': 4, 'optimizer': 'adamw', 'schedule': 'warmup_cosine', 'warmup_epochs': 0.5, 'grad_clip': 1.0, 'weight_decay': 0.05, 'lr': 0.001, 'dropout': 0.1} -- train stream: tiling
+========================================================================================
+TRAINING -- 654,593 parameters, up to 10 epochs; early stop on val_pr_auc (max), patience 3, min_delta 0.001
+  overfit rule: gap > {'pr_auc': 15.0, 'roc_auc': 3.0, 'bal_acc': 10.0, 'loss': 25.0} (percent), stops the run
+  train probe 1,805,461 windows / 49,566 drives / 2,338 positive  vs  val 1,811,777 windows / 49,566 drives / 2,308 positive
+========================================================================================
+ ep |       loss tr/val |   PR-AUC tr/val |    ROC tr/val | balacc tr/val |  PR gap |   sec |
+  1 |  0.00728/0.00712  |  0.1269/0.1308  | 0.8439/0.8468 | 0.6170/0.6222 |   -3.0% |  1833 | best
+  2 |  0.00743/0.00723  |  0.1123/0.1215  | 0.8562/0.8606 | 0.6234/0.6290 |   -7.6% |  1687 |
+  3 |  0.00708/0.00694  |  0.1287/0.1327  | 0.8659/0.8650 | 0.6147/0.6208 |   -3.0% |  1623 | best
+  4 |  0.00710/0.00700  |  0.1333/0.1337  | 0.8727/0.8749 | 0.5980/0.6077 |   -0.3% |  1513 |
+  5 |  0.00714/0.00701  |  0.1443/0.1479  | 0.8798/0.8754 | 0.6118/0.6183 |   -2.4% |  1208 | best
+  6 |  0.00694/0.00683  |  0.1436/0.1422  | 0.8811/0.8760 | 0.6082/0.6110 |   +1.0% |  1385 |
+  7 |  0.00697/0.00688  |  0.1557/0.1526  | 0.8827/0.8787 | 0.6008/0.6071 |   +2.0% |  1332 | best
+  8 |  0.00685/0.00679  |  0.1650/0.1594  | 0.8853/0.8828 | 0.6289/0.6321 |   +3.5% |  1218 | best
+  9 |  0.00694/0.00689  |  0.1666/0.1592  | 0.8854/0.8831 | 0.6129/0.6162 |   +4.7% |  1251 |
+ 10 |  0.00689/0.00685  |  0.1653/0.1580  | 0.8875/0.8832 | 0.6183/0.6198 |   +4.6% |  1230 |
+stopped at epoch 10: max_epochs
+best epoch 8 (val_pr_auc 0.1594) -- weights restored; no overfitting detected
+  results\experiments_results.xlsx is locked (open in Excel?) -- wrote results\experiments_results_20261014_152919.xlsx instead
+  saved results/figures\divergence_tf_channel_tiling.png
+
+[2/2] tf_day_tiling: {'arch': 'summary_transformer', 'hidden_dim': 64, 'n_layers': 3, 'n_heads': 4, 'optimizer': 'adamw', 'schedule': 'warmup_cosine', 'warmup_epochs': 0.5, 'grad_clip': 1.0, 'weight_decay': 0.05, 'lr': 0.001, 'dropout': 0.1} -- train stream: tiling
+========================================================================================
+TRAINING -- 172,673 parameters, up to 10 epochs; early stop on val_pr_auc (max), patience 3, min_delta 0.001
+  overfit rule: gap > {'pr_auc': 15.0, 'roc_auc': 3.0, 'bal_acc': 10.0, 'loss': 25.0} (percent), stops the run
+  train probe 1,805,461 windows / 49,566 drives / 2,338 positive  vs  val 1,811,777 windows / 49,566 drives / 2,308 positive
+========================================================================================
+ ep |       loss tr/val |   PR-AUC tr/val |    ROC tr/val | balacc tr/val |  PR gap |   sec |
+  1 |  0.00700/0.00690  |  0.1399/0.1421  | 0.8788/0.8774 | 0.6031/0.6077 |   -1.5% |   768 | best
+  2 |  0.00704/0.00696  |  0.1417/0.1484  | 0.8843/0.8816 | 0.6050/0.6131 |   -4.5% |   757 | best
+  3 |  0.00689/0.00680  |  0.1520/0.1578  | 0.8860/0.8827 | 0.6165/0.6222 |   -3.7% |   740 | best
+  4 |  0.00683/0.00678  |  0.1553/0.1559  | 0.8887/0.8839 | 0.6091/0.6157 |   -0.4% |   725 |
+  5 |  0.00682/0.00677  |  0.1644/0.1627  | 0.8903/0.8854 | 0.6261/0.6297 |   +1.0% |   739 | best
+  6 |  0.00677/0.00672  |  0.1615/0.1596  | 0.8920/0.8872 | 0.6322/0.6366 |   +1.2% |   697 |
+  7 |  0.00673/0.00670  |  0.1770/0.1719  | 0.8940/0.8875 | 0.6198/0.6227 |   +3.0% |   689 | best
+  8 |  0.00674/0.00675  |  0.1795/0.1709  | 0.8954/0.8897 | 0.6340/0.6375 |   +5.0% |   718 |
+  9 |  0.00681/0.00682  |  0.1819/0.1729  | 0.8965/0.8900 | 0.6160/0.6197 |   +5.2% |   700 |
+ 10 |  0.00672/0.00675  |  0.1815/0.1707  | 0.8980/0.8902 | 0.6249/0.6280 |   +6.3% |   715 |
+stopped at epoch 10: patience (3 epochs without a gain)
+best epoch 7 (val_pr_auc 0.1719) -- weights restored; no overfitting detected
+  results\experiments_results.xlsx is locked (open in Excel?) -- wrote results\experiments_results_20261014_173408.xlsx instead
+  saved results/figures\divergence_tf_day_tiling.png
+
+[1/1] cnn_tiling: {'arch': 'cnn', 'dilations': (1, 2, 4, 8, 16), 'kernel_size': 3, 'hidden_dim': 128, 'dropout': 0.1, 'lr': 0.003, 'weight_decay': 1e-05} -- train stream: tiling
+========================================================================================
+TRAINING -- 519,297 parameters, up to 10 epochs; early stop on val_pr_auc (max), patience 3, min_delta 0.001
+  overfit rule: gap > {'pr_auc': 15.0, 'roc_auc': 3.0, 'bal_acc': 10.0, 'loss': 25.0} (percent), stops the run
+  train probe 1,805,461 windows / 49,566 drives / 2,338 positive  vs  val 1,811,777 windows / 49,566 drives / 2,308 positive
+========================================================================================
+ ep |       loss tr/val |   PR-AUC tr/val |    ROC tr/val | balacc tr/val |  PR gap |   sec |
+  1 |  0.00754/0.00741  |  0.1307/0.1450  | 0.8760/0.8736 | 0.6126/0.6199 |   -9.9% |   754 | best
+  2 |  0.00703/0.00691  |  0.1286/0.1438  | 0.8832/0.8798 | 0.6122/0.6178 |  -10.5% |   854 |
+  3 |  0.00702/0.00692  |  0.1344/0.1473  | 0.8758/0.8712 | 0.6179/0.6252 |   -8.8% |  1124 | best
+  4 |  0.00709/0.00702  |  0.1180/0.1315  | 0.8791/0.8762 | 0.6083/0.6149 |  -10.2% |   920 |
+  5 |  0.00710/0.00702  |  0.1348/0.1416  | 0.8787/0.8777 | 0.6103/0.6163 |   -4.8% |   887 |
+  6 |  0.00700/0.00691  |  0.1460/0.1510  | 0.8820/0.8802 | 0.6241/0.6286 |   -3.3% |   741 | best
+  7 |  0.00701/0.00689  |  0.1467/0.1548  | 0.8837/0.8828 | 0.6205/0.6275 |   -5.3% |   699 | best
+  8 |  0.00720/0.00711  |  0.1481/0.1525  | 0.8814/0.8810 | 0.6205/0.6228 |   -2.9% |   755 |
+  9 |  0.00762/0.00751  |  0.1424/0.1485  | 0.8784/0.8768 | 0.6273/0.6328 |   -4.1% |   711 |
+ 10 |  0.00722/0.00711  |  0.1545/0.1588  | 0.8847/0.8839 | 0.6222/0.6282 |   -2.7% |   695 | best
+stopped at epoch 10: max_epochs
+best epoch 10 (val_pr_auc 0.1588) -- weights restored; no overfitting detected
+  results\experiments_results.xlsx is locked (open in Excel?) -- wrote results\experiments_results_20261014_195619.xlsx instead
+  saved results/figures\divergence_cnn_tiling.png
+resumed results\experiments_results.xlsx: ['shallow', 'deeper', 'no_dilation', 'kernel_5', 'narrow', 'wide', 'dropout_0.3', 'weight_decay_1e-4', 'lr_3e-03', 'lr_3e-04', 'baseline', 'xgboost', 'tf_summary', 'tf_plain', 'tf_summary_6layers', 'tf_summary_width64', 'tf_summary_lr3e-04']
+
+========================================================================================
+SCORING ON THE TILING WINDOWS
+========================================================================================
+  tf_channel_tiling: not in the log -- skipped
+  tf_day_tiling: not in the log -- skipped
+  cnn_tiling: not in the log -- skipped
+resumed results\experiments_results.xlsx: ['shallow', 'deeper', 'no_dilation', 'kernel_5', 'narrow', 'wide', 'dropout_0.3', 'weight_decay_1e-4', 'lr_3e-03', 'lr_3e-04', 'baseline', 'xgboost', 'tf_summary', 'tf_plain', 'tf_summary_6layers', 'tf_summary_width64', 'tf_summary_lr3e-04']
+  wrote results/model_comparison.xlsx
+total 511.4 min
+RUN EXIT 0 at Wed Oct 14 19:56:39 JDT 2026

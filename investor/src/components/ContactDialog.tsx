@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Mail, Send, X } from "lucide-react";
 import { CONTACT } from "../lib/contact";
+import { useLang } from "../lib/i18n";
 
 const field =
   "mt-1.5 block w-full rounded-lg border border-line bg-void/60 px-3 py-2.5 text-sm text-ink placeholder:text-faint focus:border-signal focus:outline-none";
@@ -12,6 +13,7 @@ export function ContactDialog() {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const first = useRef<HTMLInputElement>(null);
+  const { t } = useLang();
 
   useEffect(() => {
     const on = () => {
@@ -40,7 +42,7 @@ export function ContactDialog() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     if (!CONTACT.email) {
-      setError("No contact address is configured yet. Set CONTACT.email in src/lib/contact.ts.");
+      setError(t("No contact address is configured yet. Set CONTACT.email in src/lib/contact.ts.", "עדיין לא הוגדרה כתובת ליצירת קשר. יש להגדיר CONTACT.email בקובץ src/lib/contact.ts."));
       return;
     }
     const body = [
@@ -74,13 +76,13 @@ export function ContactDialog() {
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="kicker mb-1.5 text-[10px]">Get in touch</p>
+                <p className="kicker mb-1.5 text-[10px]">{t("Get in touch", "צרו קשר")}</p>
                 <h2 id="contact-title" className="text-xl font-semibold">
-                  Talk to the team
+                  {t("Talk to the team", "דברו עם הצוות")}
                 </h2>
-                <p className="mt-1 text-sm text-muted">Questions, a pilot on your fleet, or the full technical report.</p>
+                <p className="mt-1 text-sm text-muted">{t("Questions, a pilot on your fleet, or the full technical report.", "שאלות, פיילוט על הצי שלכם, או הדוח הטכני המלא.")}</p>
               </div>
-              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-muted hover:text-ink">
+              <button type="button" aria-label={t("Close", "סגירה")} onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-muted hover:text-ink">
                 <X size={18} />
               </button>
             </div>
@@ -88,39 +90,39 @@ export function ContactDialog() {
             {sent ? (
               <div className="rounded-xl border border-ok/30 bg-ok/5 p-5 text-sm text-soft">
                 <p className="flex items-center gap-2 font-medium text-ok">
-                  <Mail size={15} aria-hidden /> Your mail app should now be open with the message ready.
+                  <Mail size={15} aria-hidden /> {t("Your mail app should now be open with the message ready.", "אפליקציית המייל אמורה להיפתח עכשיו עם ההודעה מוכנה.")}
                 </p>
                 <p className="mt-2 text-muted">
-                  If nothing opened, write to <span className="text-ink">{CONTACT.email}</span> directly.
+                  {t("If nothing opened, write to", "אם שום דבר לא נפתח, כתבו ישירות ל־")} <span className="text-ink">{CONTACT.email}</span>
                 </p>
               </div>
             ) : (
               <form onSubmit={submit} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="block text-xs text-muted">
-                    Name
+                    {t("Name", "שם")}
                     <input ref={first} name="name" required autoComplete="name" className={field} />
                   </label>
                   <label className="block text-xs text-muted">
-                    Organisation <span className="text-faint">(optional)</span>
+                    {t("Organisation", "ארגון")} <span className="text-faint">{t("(optional)", "(לא חובה)")}</span>
                     <input name="org" autoComplete="organization" className={field} />
                   </label>
                 </div>
                 <label className="block text-xs text-muted">
-                  Email
-                  <input name="email" type="email" required autoComplete="email" className={field} />
+                  {t("Email", "אימייל")}
+                  <input name="email" type="email" dir="ltr" required autoComplete="email" className={field} />
                 </label>
                 <label className="block text-xs text-muted">
-                  Message
-                  <textarea name="message" required rows={4} className={field} placeholder="What would you like to know?" />
+                  {t("Message", "הודעה")}
+                  <textarea name="message" required rows={4} className={field} placeholder={t("What would you like to know?", "מה תרצו לדעת?")} />
                 </label>
                 {error && <p className="rounded-lg border border-warn/30 bg-warn/5 px-3 py-2 text-xs text-warn">{error}</p>}
                 <div className="flex items-center justify-end gap-3 pt-1">
                   <button type="button" onClick={() => setOpen(false)} className="text-sm text-muted hover:text-ink">
-                    Cancel
+                    {t("Cancel", "ביטול")}
                   </button>
                   <button type="submit" className="btn btn-primary">
-                    <Send size={14} aria-hidden /> Send message
+                    <Send size={14} aria-hidden className="rtl:-scale-x-100" /> {t("Send message", "שליחת הודעה")}
                   </button>
                 </div>
               </form>

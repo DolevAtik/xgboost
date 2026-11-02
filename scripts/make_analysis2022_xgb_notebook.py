@@ -14,8 +14,10 @@ in the notebook, so its results are in hand early. Every output file carries a `
 prefix so this notebook never overwrites the plain 2022 notebook's results. Both share
 the cached `store_2022`, so they should not run at the same time.
 
-The logic lives in `scripts/leakage_audit.py`, `scripts/backblaze_window_pipeline.py`
-and `scripts/archive_window_pipeline.py`; the notebook drives them.
+The logic lives in `scripts/leakage_audit.py`, `scripts/backblaze_window_pipeline.py`,
+`scripts/archive_window_pipeline.py` and `scripts/overfit_experiments.py` (train/val
+divergence, early stopping, the variation sweep and its Excel log); the notebook drives
+them.
 """
 import json
 import os
@@ -38,11 +40,12 @@ def code(text):
 
 # ===========================================================================
 md(r"""
-# Drive failure from 30-day SMART windows — Backblaze, 2022 to today, CNN vs XGBoost
+# Drive failure from 30-day SMART windows — Backblaze, 2022 to today, CNN vs XGBoost vs transformer
 
 The same pipeline as `Dataset_backblaze_Analysis_2022.ipynb` — archives from **2022
-onward** — with a second model added: **XGBoost** on a flattened summary of each 30-day
-window, scored against the CNN on the same test drives and the same windows.
+onward** — with two more models added: **XGBoost** on a flattened summary of each 30-day
+window, and a **transformer** over the window's days, both scored against the CNN on the
+same test drives and the same windows.
 
 | § | question | what gets printed |
 |---|---|---|
@@ -50,9 +53,11 @@ window, scored against the CNN on the same test drives and the same windows.
 | **2** | can the model see the label at all? | **four executed checks**, not a claim |
 | **3** | how many 30-day windows cover a drive's whole life? | per-drive window and **batch counts** |
 | **4** | does this drive fail in *this* 30 days? (CNN) | a verdict per window, plus per-drive histograms |
+| **4b** | when does the CNN start to overfit, and does its shape change that? | train-vs-validation divergence per variation, logged to `results/experiments_results.xlsx`, with the winner on a `Best Model` sheet |
 | **5** | does gradient boosting on window summaries beat the CNN? | XGBoost training, test metrics, **CNN vs XGBoost** table and curves |
-| **6** | what does a tree grown to 100% accuracy look like? | the depth ladder, and what it costs |
-| **Summary** | which model is best? | all three models in one table, and the winner by drive precision @100 and PR-AUC |
+| **5b** | can a transformer beat the CNN? | five transformer variations under the CNN's protocol, then **CNN vs XGBoost vs transformer** on the same windows |
+| **6** | how far does a single tree get? | a depth ladder up to **depth 8**, train vs test |
+| **Summary** | which model is best? | all four models in one table, the winner by drive precision @100 and PR-AUC, and `results/model_comparison.xlsx` with every CNN, transformer and XGBoost run |
 
 **Scope.** Archives `Q1_2022` through the newest quarter. A drive that was already in
 service in 2021 enters with only its 2022-onward rows, which is the intended reading of
@@ -307,7 +312,11 @@ balanced sampler *and* a large `pos_weight` — is the mistake documented in
 `TOSHIBA_PIPELINE.md`.
 
 **Early stopping on validation PR-AUC.** At a base rate near 0.1%, accuracy is
-meaningless: predicting "healthy" every time scores over 99.8%.
+meaningless: predicting "healthy" every time scores over 99.8%. Validation *loss* is not
+used either: the model trains on a resampled stream, so its probabilities drift in
+calibration while its ranking improves. The earlier run shows exactly that, with val
+loss rising from epoch 3 to 4 while val PR-AUC rose too. The weights from the best
+epoch are restored at the end.
 """)
 
 md(r"""
@@ -393,7 +402,9 @@ tcfg = bw.TrainConfig(
     arch="cnn", hidden_dim=int(best.hidden_dim), dropout=float(best.dropout),
     dilations=BEST_DILATIONS, kernel_size=int(best.kernel_size),
     batch_size=cfg.batch_size, lr=float(best.lr),
-    weight_decay=float(best.weight_decay), max_epochs=6, patience=2,
+    # The previous run (max_epochs=6) had its best epoch at 6: it was cut off while still
+    # improving, never early-stopped. 20 epochs leaves room for the curves to turn.
+    weight_decay=float(best.weight_decay), max_epochs=20, patience=3,
     loss="bce", sampler="none",
     # num_workers=0 on purpose: a batch is ~23 MB and worker IPC costs several times
     # what the gather itself does -- 8 workers measured 7x slower than none.
@@ -401,6 +412,7 @@ tcfg = bw.TrainConfig(
 )
 
 loaders = ap.build_loaders(bundle, tcfg, device)
+bw.set_seed(SEED)       # the same initial weights the variation sweep gives its baseline
 model = bw.build_model(bundle.num_features, cfg.window_days, tcfg).to(device)
 with torch.no_grad():
     probe = torch.zeros(2, cfg.window_days, bundle.num_features, device=device)
@@ -409,11 +421,116 @@ with torch.no_grad():
 print(f"{bw.count_parameters(model):,} trainable parameters on {device}")
 """)
 
+md(r"""
+### Measuring overfitting: a train probe that can be compared with validation
+
+Overfitting shows as training performance pulling away from validation performance. The
+training loss the loop has always reported cannot show that, for two reasons:
+
+* it is measured on the **resampled** stream: `RandomWindows` pushes a share of draws
+  onto failure regions, so the stream runs at about 1.5% positives against
+  validation's 0.2%. In the last run that alone made the training loss about **3× higher**
+  than the validation loss (0.046 vs 0.015), the opposite of what overfitting looks like;
+* it is measured with dropout on, while the weights move under it.
+
+So every epoch now also scores a **train probe**: a fixed set of windows from *training*
+drives, enumerated exactly like the validation monitor (same stride, same share of
+failing drives, natural prevalence) and scored in eval mode. Probe and validation then
+differ in one thing only: whether the model was trained on those drives.
+
+**The rule.** Gaps are signed so that positive means train looks better. An epoch is
+flagged as overfitting when any gap exceeds its limit:
+
+| gap | definition | limit |
+|---|---|---|
+| PR-AUC | (train − val) / val | 15% |
+| ROC-AUC | (train − val) / val | 3% |
+| balanced accuracy | (train − val) / val, both at the validation threshold | 10% |
+| loss | (val − train) / train | 25% |
+
+The limits sit above epoch-to-epoch noise: validation PR-AUC near 0.15 moves about 5%
+between neighbouring epochs on its own. The **divergence epoch** is detected separately,
+from the trend rather than a threshold. It is the first epoch after validation's best
+from which, for two epochs running, the train metric keeps improving while the gap widens.
+
+**Stopping.** Training stops after 3 epochs without a 0.001 gain in validation PR-AUC, or
+once 2 epochs since the best one have been flagged by the rule. Either way, the best
+epoch's weights are restored.
+
+Per-epoch monitoring runs at stride 30, the same windows `cnn_search` ranked on. The
+reported evaluation below still tunes its threshold and scores the test set at stride 1.
+""")
+
 code(r"""
-model, history, best_val = ap.train_archive_model(model, loaders, bundle, tcfg, device)
-print(f"\nBest validation PR-AUC {best_val:.4f} at epoch "
-      f"{1 + int(np.nanargmax(history['val_pr_auc']))}")
-bw.plot_training_history(history, save_path=f"{FIG_DIR}/2022x_step3_training_history.png")
+import overfit_experiments as ox
+
+MONITOR_STRIDE = 30
+val_monitor = ap.EnumeratedWindows(store, bundle.splits["val"], batch_size=cfg.batch_size,
+                                   stride=MONITOR_STRIDE, split_name="val")
+train_probe = ox.make_train_probe(store, bundle.splits["train"], like=val_monitor,
+                                  seed=SEED)
+test_monitor = ap.EnumeratedWindows(store, bundle.splits["test"], batch_size=cfg.batch_size,
+                                    stride=MONITOR_STRIDE, split_name="test")
+for ds in (train_probe, val_monitor, test_monitor):
+    print("  " + ds.label_report())
+
+RULE = ox.OverfitRule(pr_auc_gap_pct=15.0, roc_auc_gap_pct=3.0, bal_acc_gap_pct=10.0,
+                      loss_gap_pct=25.0, min_consecutive=2, stop_on_overfit=True)
+ES = dict(monitor="val_pr_auc", mode="max", patience=tcfg.patience, min_delta=1e-3,
+          restore_best_weights=True)
+EXP_LOG = ox.ExperimentLog("results/experiments_results.xlsx", resume=True)
+""")
+
+code(r"""
+# test_ds is watch-only: scored each epoch for the train-vs-test chart below, never
+# read by early stopping, the best-epoch choice or the threshold.
+run = ox.train_with_diagnostics(model, bundle.datasets["train"], val_monitor, train_probe,
+                                tcfg, device, early_stopping=ox.EarlyStopping(**ES),
+                                rule=RULE, test_ds=test_monitor)
+model, history = run.model, run.history_dict
+best_val = float(run.history.set_index("epoch").loc[run.best_epoch, "val_pr_auc"])
+
+d = run.diagnostics
+print(f"\nOVERFITTING DIAGNOSTICS")
+print(f"  best epoch ............. {d['best_epoch']} (val PR-AUC {best_val:.4f}), "
+      f"weights restored")
+print(f"  stopped ................ epoch {d['stopped_epoch']} -- {d['stop_reason']}")
+print(f"  divergence begins ...... "
+      f"{d['divergence_epoch'] or 'not observed'}"
+      f"{' (' + d['divergence_metric'] + ')' if d['divergence_metric'] else ''}")
+print(f"  first flagged epoch .... {d['first_flagged_epoch'] or 'none'}")
+print(f"  gaps at best epoch ..... PR-AUC {d['pr_auc_gap_pct_at_best']:+.1f}%  "
+      f"ROC-AUC {d['roc_auc_gap_pct_at_best']:+.1f}%  "
+      f"bal.acc {d['bal_acc_gap_pct_at_best']:+.1f}%  loss {d['loss_gap_pct_at_best']:+.1f}%")
+print(f"  verdict ................ {d['status']}")
+ox.plot_divergence(run.history, d, RULE, title="selected CNN (search winner)",
+                   save_path=f"{FIG_DIR}/2022x_step3_divergence.png")
+""")
+
+md(r"""
+### Train vs test, epoch by epoch
+
+The same reading as the decision tree's depth ladder in §6, for the CNN: while train and
+test rise together the model is still learning things that carry over to drives it has
+never seen; once train keeps climbing and test stalls, the extra epochs are memorisation.
+Early stopping should land at that point.
+
+Test is scored at every epoch only to draw this picture. Every choice the run makes --
+when to stop, which epoch to keep, the threshold -- comes from validation (dashed).
+Accuracy is shown for completeness: at a 0.1% positive rate it is pinned near 1.0 whatever
+the model does, so read balanced accuracy and PR-AUC.
+""")
+
+code(r"""
+ox.plot_train_test_curve(
+    run.history, run.best_epoch,
+    title=f"CNN ({len(tcfg.dilations)} blocks, width {tcfg.hidden_dim}): "
+          f"train vs test by epoch",
+    save_path=f"{FIG_DIR}/2022x_cnn_train_test_curve.png")
+h = run.history.set_index("epoch")
+print(f"at the kept epoch {run.best_epoch}: train PR-AUC {h.loc[run.best_epoch, 'train_pr_auc']:.4f}"
+      f"  test PR-AUC {h.loc[run.best_epoch, 'test_pr_auc']:.4f}"
+      f"  ({100 * (h.loc[run.best_epoch, 'train_pr_auc'] / h.loc[run.best_epoch, 'test_pr_auc'] - 1):+.1f}% train over test)")
 """)
 
 code(r"""
@@ -422,6 +539,20 @@ results = ap.evaluate_archive_final(model, loaders, bundle, tcfg, device,
 results["history"] = history
 ap.plot_evaluation(results, ks=(10, 25, 50, 100, 250, 1000),
                    save_path=f"{FIG_DIR}/2022x_step3_evaluation.png")
+""")
+
+code(r"""
+# The selected model is the 'baseline' row of the experiment log: tested on the same
+# stride-30 windows as every variation in 4b, at the threshold its validation run chose.
+# (The stride-1 numbers above stay the headline figures; this row is for comparison.)
+# Its weights are checkpointed like every variation's, so it can win the Best Model sheet.
+baseline_test = ox.evaluate_on_test(model, test_monitor, run.val_threshold, device)
+baseline_cfg = ox.describe_config(tcfg, float(best.train_positive_ratio), model)
+baseline_cfg["checkpoint"] = ox.save_checkpoint(
+    model, "models/experiments/baseline.pt", tcfg, float(best.train_positive_ratio))
+EXP_LOG.add("baseline", baseline_cfg, run.history, run.diagnostics, baseline_test,
+            seconds=run.seconds, eval_protocol=ox.eval_protocol(val_monitor, test_monitor))
+EXP_LOG.save()
 """)
 
 md(r"""
@@ -483,6 +614,117 @@ print(f"\n{len(picks)} drives plotted, one histogram each: the distribution of t
 # ===========================================================================
 md(r"""
 ---
+## 4b — Automated experiment pipeline: every variation, one winner
+
+One cell runs the whole search with no manual steps. For each variation it
+
+1. builds the network,
+2. trains it with **early stopping** on validation PR-AUC (patience 3, `min_delta` 0.001,
+   best weights restored) and the **overfitting rule** from §4 watching the train-probe
+   vs validation gap every epoch,
+3. saves the restored best weights as a checkpoint (`models/experiments/<name>.pt`),
+4. scores train, validation and test with those weights: PR-AUC, ROC-AUC, loss,
+   balanced accuracy, accuracy, precision, recall, F1,
+5. rewrites `results/experiments_results.xlsx`, so an interruption loses at most the run
+   in progress.
+
+When every variation is in, the **winner is chosen on validation PR-AUC**, its checkpoint
+is reloaded, and it is scored **once on the full stride-1 test set** (~89M windows).
+Intermediate epochs are scored at stride 30, the same windows as `cnn_search`, to keep
+each run fast.
+
+**Why the winner is chosen on validation, never on test.** With nine-plus candidates,
+the one with the highest test score is partly the one that got luckiest on this test
+split, so its test number would overstate how it does on new drives. Choosing on
+validation leaves the test number an honest estimate.
+
+Variations move **one knob at a time** away from the search winner (`baseline`, trained
+above), so each row isolates one change:
+
+| variation | what changes |
+|---|---|
+| `shallow` / `deeper` | two blocks fewer / one more (doubled dilation) |
+| `no_dilation` | same depth, every dilation 1: the receptive field shrinks below the 30-day window (21 days for the 5-block winner) |
+| `kernel_5` | kernel 5 instead of 3 |
+| `narrow` / `wide` | half / double the hidden width |
+| `dropout_0.3`, `weight_decay_1e-4` | stronger regularisation |
+| `lr_3e-03`, `lr_3e-04` | learning rate x3 / divided by 3 |
+
+For a full grid instead, swap in `ox.grid_variations({...})` (commented in the cell).
+
+**The workbook:**
+
+| sheet | contents |
+|---|---|
+| `Best Model` | the winner: configuration, best / stopped / divergence epoch, verdict, every metric on train · validation · test, and the full-test pass |
+| `Summary Table` | the leaderboard: one row per variation with hyperparameters, best and stopped epoch, **Overfitting Triggered (Yes/No)**, and each metric for train · val · test side by side. Ranked by validation PR-AUC |
+| `Stopping Rules` | the three stopping conditions with their settings, the overfitting limits, and which condition stopped each run (best epoch, stopped epoch, epochs after best) |
+| `Epoch History` | every epoch of every run: loss, PR-AUC, ROC-AUC, balanced accuracy, precision, recall, F1, gaps, flags |
+| `Configs`, `Diagnostics`, `Test_PrecisionAtK`, `Full Test` | settings incl. checkpoint path, divergence details, Precision@K, the winner's full test |
+| `C01_…` | one per variation: its epochs with Excel line charts of train vs validation |
+
+**Cost.** Each variation takes roughly 15–50 minutes, and the full test pass about 30.
+The pipeline **resumes**: a variation already in the workbook is skipped. Set
+`RUN_SWEEP=0` to skip training and only rebuild the report from the log.
+""")
+
+code(r"""
+RUN_SWEEP = os.environ.get("RUN_SWEEP", "1") == "1"
+BASE_SHAPE = {"dilations": BEST_DILATIONS, "kernel_size": int(best.kernel_size),
+              "hidden_dim": int(best.hidden_dim), "dropout": float(best.dropout),
+              "weight_decay": float(best.weight_decay), "lr": float(best.lr)}
+VARIATIONS = ox.default_variations(BASE_SHAPE)
+# A full grid instead (16 runs here -- grids multiply fast):
+# VARIATIONS = ox.grid_variations({"dilations": [(1, 2, 4), (1, 2, 4, 8, 16)],
+#                                  "hidden_dim": [64, 128], "dropout": [0.1, 0.3],
+#                                  "lr": [3e-4, 1e-3]})
+# Any entry is {"name": ..., <TrainConfig field or train_positive_ratio>: value}.
+print(pd.DataFrame(VARIATIONS).fillna("").to_string(index=False))
+
+if RUN_SWEEP:
+    BEST = ox.run_experiments(
+        VARIATIONS, tcfg, bundle, val_monitor, train_probe, test_monitor, device, EXP_LOG,
+        test_full_ds=bundle.datasets["test"],          # the winner's full stride-1 test
+        select_by="val_pr_auc", rule=RULE,
+        es_kwargs={k: v for k, v in ES.items() if k != "patience"},
+        train_positive_ratio=float(best.train_positive_ratio), seed=SEED,
+        fig_dir=FIG_DIR)
+""")
+
+code(r"""
+sweep = EXP_LOG.summary()
+sweep = sweep[sweep.model_type == "cnn"]
+cols = ["rank_by_val", "variation", "layers", "dilations", "kernel_size", "hidden_dim",
+        "dropout", "lr", "parameters", "best_epoch", "stopped_epoch", "divergence_epoch",
+        "overfitting_triggered", "train_pr_auc", "val_pr_auc", "test_pr_auc",
+        "pr_auc_gap_pct", "test_roc_auc", "test_bal_acc", "test_f1", "test_P@100_drives"]
+print("SUMMARY TABLE -- ranked by validation PR-AUC; test is read, never used to choose\n")
+print(sweep[[c for c in cols if c in sweep]].to_string(
+    index=False, float_format=lambda v: f"{v:.4f}"))
+
+win = EXP_LOG.best_model("val_pr_auc")
+full = EXP_LOG.frames["Full Test"]
+full = full[full.variation == win.variation] if "variation" in full else full.iloc[0:0]
+print(f"\nBEST MODEL: {win.variation}  ({win.layers} blocks, dilations {win.dilations}, "
+      f"kernel {win.kernel_size}, width {win.hidden_dim}, dropout {win.dropout}, "
+      f"lr {win.lr:g})")
+print(f"  best epoch {win.best_epoch}, stopped {win.stopped_epoch}, overfitting "
+      f"triggered: {win.overfitting_triggered} -- {win.status}")
+print(f"  {'':<18}{'train':>9}{'val':>9}{'test':>9}"
+      + (f"{'full test':>11}" if len(full) else ""))
+for m, label in ox.ExperimentLog.METRICS:
+    line = (f"  {label:<18}{win[f'train_{m}']:>9.4f}{win[f'val_{m}']:>9.4f}"
+            f"{win[f'test_{m}']:>9.4f}")
+    if len(full):
+        line += f"{full.iloc[0][m]:>11.4f}"
+    print(line)
+print(f"\nfull report: {EXP_LOG.path} (sheet 'Best Model' first)")
+ox.plot_variation_gaps(EXP_LOG, RULE, save_path=f"{FIG_DIR}/2022x_step4b_variations.png")
+""")
+
+# ===========================================================================
+md(r"""
+---
 ## 5 — XGBoost on the same windows, head to head with the CNN
 
 A tree model cannot take a `(30, 46)` tensor, so each **tiling** window is reduced to a
@@ -494,8 +736,10 @@ splits, from the same drive-grouped split the CNN used, so no drive crosses a bo
 
 * `tree_method="hist"` on the GPU when there is one: the 10.5M-row training table fits in
   a few minutes rather than hours.
-* **Early stopping on validation PR-AUC** (`eval_metric="aucpr"`), the same criterion the
-  CNN stops on, with 100 rounds of patience.
+* **Early stopping on validation PR-AUC** (`aucpr`), the same criterion the CNN stops on,
+  with 100 rounds of patience. A train probe of the same size as validation is scored
+  every round too, so XGBoost goes through the same overfitting rule as the CNN, and it
+  is logged to the same workbook.
 * **No imbalance weighting.** PR-AUC and Precision@K only depend on the ranking, and the
   decision threshold is tuned on validation — so `scale_pos_weight` would add a second
   correction on top of the threshold for no gain.
@@ -530,15 +774,27 @@ code(r"""
 torch.cuda.empty_cache()
 xgb_device = "cuda" if torch.cuda.is_available() else "cpu"
 
+# A train probe for XGBoost, as for the CNN: training rows the size of the validation
+# table, at their natural prevalence (tiling windows are not resampled), scored every
+# round. Validation goes LAST in eval_set because early stopping watches the last set,
+# and "aucpr" goes last in eval_metric for the same reason.
+rng = np.random.default_rng(SEED)
+probe_rows = np.sort(rng.choice(len(ytr), size=min(len(ytr), len(yva)), replace=False))
+Xtr_probe, ytr_probe = Xtr[probe_rows], ytr[probe_rows]
+
 xgb_clf = xgb.XGBClassifier(
     n_estimators=3000, learning_rate=0.05, max_depth=8, min_child_weight=5,
     subsample=0.8, colsample_bytree=0.8, max_bin=256,
     tree_method="hist", device=xgb_device,
-    objective="binary:logistic", eval_metric="aucpr",
+    objective="binary:logistic", eval_metric=["logloss", "auc", "aucpr"],
     early_stopping_rounds=100, random_state=SEED,
 )
 t0 = time.time()
-xgb_clf.fit(Xtr, ytr, eval_set=[(Xva, yva)], verbose=100)
+xgb_clf.fit(Xtr, ytr, eval_set=[(Xtr_probe, ytr_probe), (Xva, yva)], verbose=100)
+# The per-round curves are kept in evals_result(). A list-valued eval_metric must not
+# reach set_params(device=...) below: xgboost 3.4 hands it to the booster as one string
+# and fails, so it goes back to the single metric early stopping used.
+xgb_clf.set_params(eval_metric="aucpr")
 print(f"\nbest iteration {xgb_clf.best_iteration} of {xgb_clf.n_estimators} "
       f"(val PR-AUC {xgb_clf.best_score:.4f})  --  {time.time()-t0:.0f}s on {xgb_device}")
 """)
@@ -575,6 +831,40 @@ imp_xgb = imp_xgb.sort_values("gain", ascending=False).head(15).reset_index(drop
 imp_xgb.index += 1
 print("\nwhat XGBoost relies on most (share of total gain):")
 print(imp_xgb.to_string())
+""")
+
+code(r"""
+# XGBoost through the same overfitting rule, with a boosting round in place of an epoch.
+# A single round moves the curves far less than an epoch does, so a trend has to hold
+# for 50 rounds rather than 2 before it counts as divergence.
+import dataclasses
+XGB_RULE = dataclasses.replace(RULE, min_consecutive=50)
+xgb_hist = ox.xgb_history(xgb_clf, XGB_RULE, y_probe=ytr_probe, y_val=yva)
+xgb_best_round = int(xgb_clf.best_iteration) + 1
+xgb_stop = ("early_stopping_rounds (100 without a val PR-AUC gain)"
+            if len(xgb_hist) < xgb_clf.n_estimators else "n_estimators")
+xgb_diag = ox.diagnose(xgb_hist, xgb_best_round, XGB_RULE, xgb_stop)
+xgb_test_log = ox.evaluate_on_test(None, None, thr_xgb, None, ks=KS,
+                                   probs=p_te, targets=yte, codes=g_te)
+xgb_conf = {k: v for k, v in xgb_clf.get_params().items()
+            if k in ("n_estimators", "learning_rate", "max_depth", "min_child_weight",
+                     "subsample", "colsample_bytree", "max_bin")}
+xgb_conf.update({"best_iteration": int(xgb_clf.best_iteration),
+                 "features": len(feat_cols)})
+EXP_LOG.add("xgboost", xgb_conf, xgb_hist, xgb_diag, xgb_test_log, model_type="xgboost",
+            eval_protocol="train/val tiling, test tiling")
+EXP_LOG.save()
+
+print(f"XGBOOST OVERFITTING DIAGNOSTICS -- best round {xgb_best_round}, "
+      f"{xgb_diag['stop_reason']}")
+print(f"  divergence begins ...... round {xgb_diag['divergence_epoch'] or 'not observed'}")
+print(f"  gaps at best round ..... PR-AUC {xgb_diag['pr_auc_gap_pct_at_best']:+.1f}%  "
+      f"ROC-AUC {xgb_diag['roc_auc_gap_pct_at_best']:+.1f}%  "
+      f"loss {xgb_diag['loss_gap_pct_at_best']:+.1f}%")
+print(f"  verdict ................ {xgb_diag['status']}")
+ox.plot_divergence(xgb_hist, xgb_diag, XGB_RULE, title="XGBoost", xlabel="boosting round",
+                   save_path=f"{FIG_DIR}/2022x_step5_xgboost_divergence.png")
+del Xtr_probe, ytr_probe
 """)
 
 code(r"""
@@ -648,73 +938,213 @@ fig.savefig(f"{FIG_DIR}/2022x_step5_cnn_vs_xgboost.png", dpi=130, bbox_inches="t
 print(f"  saved {FIG_DIR}/2022x_step5_cnn_vs_xgboost.png")
 plt.show()
 
-del Xva, p_va; gc.collect()
+del Xva; gc.collect()     # p_va stays: the comparison workbook at the end needs it
 """)
 
 # ===========================================================================
 md(r"""
 ---
-## 6 — A decision tree grown until it is perfect on its training set
+## 5b — A transformer on the same windows
+
+XGBoost beat the CNN above, and its gain ranking says why: the top features are each
+channel's **last day** and its **first-to-last change** (`smart_197_raw_d7__last`,
+`smart_5_raw_d1__last`, `smart_5_raw__delta`). The CNN can compute these, but it has to
+learn them through five convolution blocks and a mean/max/last pool. The transformer here
+is built to start from them and keep what convolution does well:
+
+```
+[CLS]  [LAST]  [MEAN]  [DELTA]  day 1  day 2  ...  day 30      <- 34 tokens, d = 128
+  |       \______|______/          \_______________/
+  |       the window summary         one token per day
+  |       XGBoost reads              (46 channels -> 128)
+  +--- 3 pre-norm encoder layers, 4 heads, attention over all 34 tokens ---+
+                       head reads [CLS] + the last day  ->  1 logit
+```
+
+* **Day tokens + learned positions** — attention sees every day from the first layer, so
+  the receptive field is the whole window without stacking dilations.
+* **Summary tokens** — the last day, the 30-day mean and the change, each through its own
+  projection: exactly XGBoost's 3 × 46 view, as tokens the days can attend to and that can
+  attend back to the days. The model starts where XGBoost is and uses attention for what a
+  summary loses (*when* in the window a counter jumped, whether it is still climbing).
+* **[CLS] + last-day readout** — the pooled view plus the most recent state, the one an
+  operator acts on.
+
+**Same protocol as the CNN, so only the network differs.** The variations go through
+`ox.run_experiments` with the CNN's training stream (4 random windows per drive, 25%
+forced positives), the same stride-30 validation monitor and train probe, early stopping on
+validation PR-AUC with patience 3, the overfitting rule from §4 and seed 42. They are
+logged to the same `results/experiments_results.xlsx` as `model_type = transformer`.
+
+| variation | what changes |
+|---|---|
+| `tf_summary` | the model above: 3 layers, width 128, dropout 0.1, lr 1e-3 |
+| `tf_plain` | **control**: day tokens only, no summary tokens, no [CLS] (mean + last pool) |
+| `tf_summary_6layers` | twice the depth |
+| `tf_summary_width64` | half the width |
+| `tf_summary_lr3e-04` | learning rate ÷ 3 |
+
+The gap between `tf_plain` and `tf_summary` is what the summary tokens add; the gap between
+`tf_plain` and the CNN is what attention alone adds. As for the CNN, the winner is chosen
+on **validation** PR-AUC and only then read on test.
+
+The runs resume: a variation already in the workbook is skipped. Set `RUN_TRANSFORMER=0` to
+skip training and only report from the log. `scripts/run_transformer_comparison.py` runs
+this section and the comparison workbook as a plain script.
+""")
+
+code(r"""
+import dataclasses
+import model_comparison as mc
+
+RUN_TRANSFORMER = os.environ.get("RUN_TRANSFORMER", "1") == "1"
+# Everything but the network is inherited from the CNN's TrainConfig.
+TF_BASE = dataclasses.replace(tcfg, **mc.TRANSFORMER_BASE)
+TF_VARIATIONS = mc.transformer_variations()
+print(pd.DataFrame(TF_VARIATIONS).fillna("").to_string(index=False))
+with torch.no_grad():
+    _tf = bw.build_model(bundle.num_features, cfg.window_days, TF_BASE).to(device)
+    print(f"\ntf_summary: input (2, {cfg.window_days}, {bundle.num_features}) -> "
+          f"{tuple(_tf(torch.zeros(2, cfg.window_days, bundle.num_features, device=device)).shape)}"
+          f", {bw.count_parameters(_tf):,} parameters (the CNN has {bw.count_parameters(model):,})")
+    del _tf
+
+if RUN_TRANSFORMER:
+    TF_BEST = ox.run_experiments(
+        TF_VARIATIONS, TF_BASE, bundle, val_monitor, train_probe, test_monitor, device,
+        EXP_LOG, select_by="val_pr_auc", rule=RULE,
+        es_kwargs={k: v for k, v in ES.items() if k != "patience"},
+        train_positive_ratio=float(best.train_positive_ratio), seed=SEED,
+        fig_dir=FIG_DIR, model_type="transformer")
+""")
+
+code(r"""
+# CNN and transformer runs on the stride-30 windows every one of them was selected on.
+board = EXP_LOG.summary()
+board = board[board.model_type.isin(["cnn", "transformer"])]
+board = board[board.eval_protocol == board.eval_protocol.mode().iloc[0]]
+board = board.sort_values("val_pr_auc", ascending=False)
+cols = ["variation", "model_type", "layers", "hidden_dim", "parameters", "best_epoch",
+        "stopped_epoch", "overfitting_triggered", "train_pr_auc", "val_pr_auc",
+        "test_pr_auc", "pr_auc_gap_pct", "test_roc_auc", "test_f1", "test_P@100_drives"]
+print("CNN + TRANSFORMER RUNS -- stride-30 windows, ranked by validation PR-AUC\n")
+print(board[cols].to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+
+tf_win = EXP_LOG.best_model("val_pr_auc", model_type="transformer")
+cnn_win = EXP_LOG.best_model("val_pr_auc", model_type="cnn")
+print(f"\nbest transformer: {tf_win.variation}  val PR-AUC {tf_win.val_pr_auc:.4f}  "
+      f"test PR-AUC {tf_win.test_pr_auc:.4f}")
+print(f"best CNN:         {cnn_win.variation}  val PR-AUC {cnn_win.val_pr_auc:.4f}  "
+      f"test PR-AUC {cnn_win.test_pr_auc:.4f}")
+print(f"  -> transformer {100 * (tf_win.val_pr_auc / cnn_win.val_pr_auc - 1):+.1f}% on "
+      f"validation, {100 * (tf_win.test_pr_auc / cnn_win.test_pr_auc - 1):+.1f}% on test")
+ox.plot_variation_gaps(EXP_LOG, RULE, model_type="transformer",
+                       save_path=f"{FIG_DIR}/2022x_step5b_transformer_variations.png")
+""")
+
+code(r"""
+# The transformer winner on the same tiling windows as the CNN and XGBoost in §5. Its
+# threshold is the best-F1 cut on the tiling validation windows -- XGBoost's rule.
+tf_model, tf_cfg = ox.load_checkpoint(EXP_LOG.config_of(tf_win.variation)["checkpoint"],
+                                      bundle.num_features, cfg.window_days, device)
+p_tf_va = mc.predict_probs(tf_model, tiles["val"], device)
+p_tf = mc.predict_probs(tf_model, tiles["test"], device)
+thr_tf, _ = ap.sweep_threshold(tiles["val"].labels, p_tf_va)
+tf_test = bw.compute_metrics(yte, p_tf, thr_tf)
+_, p_drv_tf, _ = ap.drive_level_scores(p_tf, yte, g_te)
+tf_pk_win = bw.precision_at_k_table(yte, p_tf, KS)
+tf_pk_drv = bw.precision_at_k_table(y_drv, p_drv_tf, KS)
+TF_NAME = f"Transformer ({tf_win.variation})"
+
+comparison = pd.concat([comparison, pd.DataFrame([{
+    "model": TF_NAME, "PR-AUC": tf_test["pr_auc"], "ROC-AUC": tf_test["roc_auc"],
+    "threshold": tf_test["threshold"], "precision": tf_test["precision"],
+    "recall": tf_test["recall"], "F1": tf_test["f1"], "TP": tf_test["tp"],
+    "FP": tf_test["fp"], "FN": tf_test["fn"]}]).set_index("model")])
+pk_compare["Transformer drive hits"] = tf_pk_drv.hits.to_numpy()
+pk_compare["Transformer drive precision"] = tf_pk_drv.precision.to_numpy()
+pk_compare["Transformer window precision"] = tf_pk_win.precision.to_numpy()
+
+print(f"CNN vs XGBOOST vs TRANSFORMER -- the same {len(yte):,} tiling test windows\n")
+print(comparison.to_string(float_format=lambda v: f"{v:.4f}"))
+print("\ndrive precision @K:")
+print(pk_compare[["K", "CNN drive precision", "XGBoost drive precision",
+                  "Transformer drive precision"]].to_string(
+    index=False, float_format=lambda v: f"{v:.4f}"))
+gain = 100 * (tf_test["pr_auc"] / cnn_test["pr_auc"] - 1)
+print(f"\ntransformer vs CNN: PR-AUC {tf_test['pr_auc']:.4f} vs {cnn_test['pr_auc']:.4f} "
+      f"({gain:+.1f}%), drive P@100 {tf_pk_drv.set_index('k').loc[100, 'precision']:.2f} "
+      f"vs {cnn_pk_drv.set_index('k').loc[100, 'precision']:.2f}")
+
+from sklearn.metrics import precision_recall_curve
+fig, axes = plt.subplots(1, 2, figsize=(13, 4.2))
+models3 = (("CNN", p_cnn, "#3b6ea5", "CNN"), ("XGBoost", p_te, "#c1442e", "XGBoost"),
+           (TF_NAME, p_tf, "#2e8b57", "Transformer"))
+for name, p, col, _ in models3:
+    prec, rec, _ = precision_recall_curve(yte, p)
+    axes[0].plot(rec, prec, color=col, lw=1.2,
+                 label=f"{name}  (PR-AUC {comparison.loc[name, 'PR-AUC']:.4f})")
+axes[0].set_xlabel("recall"); axes[0].set_ylabel("precision")
+axes[0].set_title("Precision-recall, test tiling windows"); axes[0].legend(fontsize=8)
+for name, _, col, short in models3:
+    axes[1].plot(KS, pk_compare[f"{short} drive precision"], "o-", color=col, label=name)
+axes[1].set_xscale("log"); axes[1].set_xticks(KS)
+axes[1].set_xticklabels([str(k) for k in KS]); axes[1].set_ylim(0, 1.02)
+axes[1].set_xlabel("K drives flagged"); axes[1].set_ylabel("precision@K")
+axes[1].set_title("Drives: of the top K flagged, the share that failed")
+axes[1].legend(fontsize=8)
+for a in axes:
+    a.grid(alpha=0.25, linewidth=0.6); a.set_axisbelow(True)
+fig.tight_layout()
+fig.savefig(f"{FIG_DIR}/2022x_step5b_cnn_xgb_transformer.png", dpi=130, bbox_inches="tight")
+plt.show()
+del tf_model; torch.cuda.empty_cache()
+""")
+
+# ===========================================================================
+md(r"""
+---
+## 6 — A single decision tree, capped at depth 8
 
 Fitted on the same flattened **tiling** table as XGBoost, so the tree sees every
-training drive-day exactly once. This is the slowest section of the notebook — a single
-scikit-learn tree is fitted on one CPU core, five times over — which is why it runs last.
+training drive-day exactly once. A scikit-learn tree is fitted on one CPU core, which is
+why this section runs last.
 
-The depth ladder below is the point of the section. A tree with no depth limit and
-`min_samples_leaf=1` will reach **1.000 on the data it was fitted to** by carving a leaf
-per sample; that is what "as big as needed for 100%" produces, and the test column beside
-it is what it costs. Both are printed at every depth so the gap is visible rather than
-asserted.
+The tree is grown in depth steps **2, 4, 6, 8 and stops at 8**. An earlier run let it grow
+without a limit: it reached depth 123 and 28,881 leaves, scored 0.99999 on its training
+set, and fell to balanced accuracy 0.63 and PR-AUC 0.06 on test — a memorised training
+set, not a model — at an hour of fitting. Depth 8 already shows the whole story (the
+train-vs-test gap opening as depth grows) at a fraction of the cost, and depth 8 is also
+the depth of every tree inside XGBoost, so the two are directly comparable: one tree
+against an ensemble of a few hundred of the same size.
 
-Two things to read carefully:
-
-* **Accuracy is the wrong lens at this base rate.** Predicting "never fails" scores about
-  99.9%. Balanced accuracy — the mean of per-class recall — is reported alongside, and it
-  is the column that moves.
-* **100% may be unreachable and that is informative.** If two windows have identical
-  summary features but different labels, no tree can separate them. The cell reports how
-  many such conflicts exist, which is the ceiling on training accuracy.
+**Accuracy is the wrong lens at this base rate.** Predicting "never fails" scores about
+99.8%. Balanced accuracy — the mean of per-class recall — is reported alongside, and it
+is the column that moves.
 """)
 
 code(r"""
-# The exact ceiling: rows identical in every feature but disagreeing on the label can
-# never be separated by any tree, however deep it is allowed to grow.
-ceiling = ap.count_label_conflicts(Xtr, ytr)
-""")
-
-code(r"""
+TREE_DEPTH = 8
 tree, ladder = ap.grow_tree_to_full_accuracy(
-    Xtr, ytr, Xte, yte, depths=[4, 8, 16, 32], seed=SEED)
+    Xtr, ytr, Xte, yte, depths=[2, 4, 6, TREE_DEPTH], unbounded=False, seed=SEED)
 print()
 print(ladder.to_string(index=False))
 """)
 
 code(r"""
 final = ladder.iloc[-1]
-print(f"FINAL TREE -- depth {final.actual_depth}, {final.leaves:,} leaves, "
-      f"no depth limit, min_samples_leaf=1")
+print(f"FINAL TREE -- max_depth {TREE_DEPTH} (actual {final.actual_depth}), "
+      f"{final.leaves:,} leaves, min_samples_leaf=1")
 print(f"  training accuracy .... {final.train_accuracy:.8f}")
 print(f"  test accuracy ........ {final.test_accuracy:.8f}")
 print(f"  training balanced .... {final.train_balanced_acc:.4f}")
 print(f"  test balanced ........ {final.test_balanced_acc:.4f}")
-print()
-if final.train_accuracy >= 1.0:
-    print("  reached 100.000000% on the training set: one leaf per distinguishable row.")
-else:
-    missed = int(round((1 - final.train_accuracy) * len(ytr)))
-    print(f"  it lands {missed:,} rows short of 100%, and those are the "
-          f"{ceiling['unreachable_rows']:,} rows that are")
-    print(f"  IDENTICAL across all {Xtr.shape[1]} features to a row carrying the "
-          f"opposite label. No tree can")
-    print(f"  split what it cannot tell apart, so "
-          f"{100*ceiling['max_train_accuracy']:.6f}% is the ceiling -- the tree is")
-    print(f"  already at it, not falling short of it.")
-print(f"\n  the gap between the two ACCURACY columns is the tree memorising "
-      f"{final.leaves:,} leaves of training rows;")
-print(f"  the gap between the two BALANCED columns "
-      f"({final.train_balanced_acc:.3f} vs {final.test_balanced_acc:.3f}) is what that "
-      f"memorisation is")
-print(f"  actually worth on a disk it has never seen.\n")
+print(f"\n  both ACCURACY columns sit at the 'never fails' baseline "
+      f"({100 * (1 - ytr.mean()):.3f}%) -- they say nothing here;")
+print(f"  the BALANCED columns ({final.train_balanced_acc:.3f} train vs "
+      f"{final.test_balanced_acc:.3f} test) are the read, and the gap between")
+print(f"  them is how much of the depth-{TREE_DEPTH} tree is fitted to training drives "
+      f"rather than to failure.\n")
 
 imp = pd.DataFrame({"feature": feat_cols, "importance": tree.feature_importances_})
 imp = imp[imp.importance > 0].sort_values("importance", ascending=False).head(15)
@@ -798,20 +1228,23 @@ with open("results/w2022x_summary.json", "w", encoding="utf-8") as fh:
                     "test_at_tuned": xgb_test,
                     "test_at_half": xgb_half},
         "cnn_on_tiling_test": cnn_test,
-        "tree_ceiling": {k: float(v) for k, v in ceiling.items()},
+        "transformer": {"variation": tf_win.variation, "threshold": thr_tf,
+                        "checkpoint": EXP_LOG.config_of(tf_win.variation)["checkpoint"],
+                        "test_at_tuned": tf_test},
         "tree_final": {k: (float(v) if isinstance(v, (int, float, np.floating)) else str(v))
                        for k, v in ladder.iloc[-1].to_dict().items()},
     }, fh, indent=2)
 print("wrote results/w2022x_*.csv and results/w2022x_summary.json")
+EXP_LOG.save()          # results/experiments_results.xlsx: CNN variations, transformers, XGBoost
 """)
 
 md(r"""
 ---
-## Summary — CNN vs XGBoost vs decision tree
+## Summary — CNN vs XGBoost vs transformer vs decision tree
 
-All three models on the **same 3.1M tiling test windows** of the same 82k test drives.
-The CNN and XGBoost use the threshold each tuned on validation; the tree never saw
-validation, so it is cut at 0.5.
+All four models on the **same 3.1M tiling test windows** of the same 82k test drives.
+The CNN, XGBoost and the transformer use the threshold each tuned on validation; the tree
+never saw validation, so it is cut at 0.5.
 
 The winner is named on two criteria, in order of importance:
 
@@ -832,6 +1265,7 @@ tree_pk_drv = bw.precision_at_k_table(y_drv, p_drv_tree, KS)
 entries = [
     ("CNN", cnn_test, cnn_pk_drv),
     ("XGBoost", xgb_test, xgb_pk_drv),
+    (TF_NAME, tf_test, tf_pk_drv),
     (f"Decision tree (depth {int(final.actual_depth)})", tree_test, tree_pk_drv),
 ]
 rows = []
@@ -880,6 +1314,58 @@ print("\nwrote results/w2022x_model_summary.csv")
 """)
 
 md(r"""
+### The comparison workbook: every CNN variation, every transformer, XGBoost
+
+The table above holds one model per family. `results/model_comparison.xlsx` holds them
+**all** — each of the CNN variations from §4b, each transformer from §5b, XGBoost and the
+tree — scored on these same tiling test windows, each with its threshold tuned on the
+tiling validation windows. A family's winner is its run with the best **validation**
+PR-AUC.
+
+| sheet | contents |
+|---|---|
+| `Overview` | the verdict, each family's winner, how the comparison is kept fair |
+| `Head_to_Head` | every model ranked by drive precision @100 then PR-AUC, best per column in green, bar charts |
+| `Family_Winners` | one model per family, chosen on validation, with charts |
+| `PrecisionAtK` | drive and window Precision@K for every model, with line charts |
+| `Stride30_Leaderboard` | every CNN and transformer run on the windows it was selected on |
+| `Training`, `Epoch_History` | how each run trained, and validation PR-AUC per epoch |
+
+Scoring a network on the 4.9M tiling validation + test windows takes about a minute, so
+this cell takes roughly a quarter of an hour.
+""")
+
+code(r"""
+rows = []
+for _, cr in EXP_LOG.frames["Configs"].iterrows():
+    ck = cr.get("checkpoint")
+    if cr["model_type"] not in ("cnn", "transformer") or not isinstance(ck, str) \
+            or not os.path.exists(ck):
+        continue
+    net, ncfg = ox.load_checkpoint(ck, bundle.num_features, cfg.window_days, device)
+    note = f"{ncfg.arch}, {bw.count_parameters(net):,} parameters"
+    if cr["variation"] == "baseline":
+        note += "; the CNN selected in §4 (the search winner)"
+    rows.append(mc.score_network(net, cr["variation"], cr["model_type"], tiles, device,
+                                 note=note))
+    del net; torch.cuda.empty_cache()
+rows.append(mc.score_probs("XGBoost", "xgboost", p_va, yva, p_te, yte, g_te,
+                           note=f"{xgb_clf.best_iteration + 1} rounds, max_depth 8"))
+rows.append(mc.score_probs(f"Decision tree (depth {TREE_DEPTH})", "tree", None, None,
+                           p_tree, yte, g_te, threshold=0.5,
+                           note="one tree, cut at 0.5 (never saw validation)"))
+
+all_models, all_pk = mc.comparison_table(rows)
+all_models.to_csv("results/w2022x_tiling_comparison.csv", index=False)
+all_pk.to_csv("results/w2022x_tiling_precision_at_k.csv", index=False)
+print(all_models[["rank", "model", "family", "family_winner", "drive_P@100",
+                  "drive_P@1000", "test_pr_auc", "test_roc_auc", "val_pr_auc", "f1"]]
+      .to_string(index=False, float_format=lambda v: f"{v:.4f}"))
+mc.write_comparison_workbook(all_models, all_pk, "results/model_comparison.xlsx",
+                             exp_log_path=EXP_LOG.path)
+""")
+
+md(r"""
 ---
 ## What these numbers do and do not say
 
@@ -894,8 +1380,8 @@ they are read. Read the **lift** column in Precision@K rather than raw precision
 prefer the drive-level table — an operator pulls *K disks*, not K windows.
 
 **Tiling and stride-1 answer different questions.** The tiling set judges every
-drive-day exactly once, which is what makes the per-window verdict table and the tree
-honest. The stride-1 set scores every window that exists, which is the right basis for a
+drive-day exactly once, which is what makes the per-window verdict table and the model
+comparison honest. The stride-1 set scores every window that exists, which is the right basis for a
 ranking metric. Neither is a sample of the other.
 
 **CNN vs XGBoost is a comparison of inputs as much as of models.** The CNN reads all
@@ -905,10 +1391,15 @@ and the day-by-day shape adds little. If the CNN wins, the order of events insid
 window carries information the summaries throw away. Read the drive-level Precision@K
 rows first — that is the decision an operator makes — and PR-AUC second.
 
-**The 100% tree is a memorisation result, not a model.** It reaches perfect training
-accuracy by growing a leaf per training row, and the test column next to it is the honest
-read. At a 0.1% base rate even the test accuracy is near-perfect while the model is
-nearly useless — which is exactly why every other number in this notebook is PR-AUC,
+**The transformer is the CNN's protocol with a different network.** Same training
+stream, same monitors, same stopping rules, same seed — so its gap to the CNN is the
+architecture, and its gap to `tf_plain` is the summary tokens. Its gap to XGBoost is
+partly the training data too: XGBoost fits every one of the 10.5M tiling training windows,
+the networks see 1.1M resampled windows per epoch.
+
+**One tree is not enough, and accuracy cannot tell you so.** At a 0.2% base rate the
+depth-8 tree's accuracy is near-perfect on train and test alike while its ranking is far
+behind the ensembles — which is exactly why every other number in this notebook is PR-AUC,
 Precision@K or balanced accuracy rather than accuracy.
 
 **2022 onward is not the whole archive.** Drive models, capacities and the SMART

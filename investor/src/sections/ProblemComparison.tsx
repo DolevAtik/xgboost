@@ -4,6 +4,7 @@ import { Activity, AlertOctagon, BellRing, HardDrive, Pause, Play, RotateCcw, Sh
 import { StorySection } from "../components/StorySection";
 import { useStoryData } from "../lib/data";
 import { fmtInt } from "../lib/format";
+import { useLang } from "../lib/i18n";
 
 /** Points on the shared timeline, as fractions of its width. */
 const FAIL_AT = 0.78;
@@ -58,7 +59,7 @@ function Marker({
       style={{ left: `${at * 100}%` }}
     >
       {below && <span className="h-3 w-px" style={{ background: tone }} />}
-      <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: tone, color: tone }}>
+      <span dir="auto" className="flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: tone, color: tone }}>
         {icon}
         {label}
       </span>
@@ -137,6 +138,7 @@ export function ProblemVisual() {
   const warnDays = Math.round((FAIL_AT - ALERT_AT) * DAYS);
   const downDays = Math.max(0, Math.round((p - FAIL_AT) * DAYS));
   const live = phase === "running";
+  const { t, he } = useLang();
 
   return (
     <div className="space-y-4">
@@ -147,28 +149,28 @@ export function ProblemVisual() {
             {live && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-risk opacity-70" />}
             <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${live ? "bg-risk" : "bg-faint"}`} />
           </span>
-          {phase === "idle" ? "Ready" : live ? "Live" : phase === "paused" ? "Paused" : "Finished"}
+          {phase === "idle" ? t("Ready", "מוכן") : live ? t("Live", "בשידור חי") : phase === "paused" ? t("Paused", "מושהה") : t("Finished", "הסתיים")}
         </span>
         <span className="num text-xs text-muted">
-          day <span className="text-ink">{String(day).padStart(2, "0")}</span> / {DAYS}
+          {t("day", "יום")} <span className="text-ink">{String(day).padStart(2, "0")}</span> / {DAYS}
         </span>
-        <div className="h-1 min-w-[8rem] flex-1 overflow-hidden rounded bg-deep" aria-hidden>
+        <div dir="ltr" className="h-1 min-w-[8rem] flex-1 overflow-hidden rounded bg-deep" aria-hidden>
           <div className="h-1 bg-gradient-to-r from-signal to-warn" style={{ width: `${p * 100}%` }} />
         </div>
         <div className="flex items-center gap-2">
           {live ? (
             <button type="button" onClick={() => setPhase("paused")} className="chip hover:border-signal hover:text-ink">
-              <Pause size={12} aria-hidden /> Pause
+              <Pause size={12} aria-hidden /> {t("Pause", "השהה")}
             </button>
           ) : (
             <button type="button" onClick={start} className="btn btn-primary !px-4 !py-1.5 !text-[13px]">
-              {phase === "done" ? <RotateCcw size={13} aria-hidden /> : <Play size={13} aria-hidden />}
-              {phase === "idle" ? "Start" : phase === "paused" ? "Resume" : "Replay"}
+              {phase === "done" ? <RotateCcw size={13} aria-hidden /> : <Play size={13} aria-hidden className="rtl:rotate-180" />}
+              {phase === "idle" ? t("Start", "התחל") : phase === "paused" ? t("Resume", "המשך") : t("Replay", "הפעל שוב")}
             </button>
           )}
           {(live || phase === "paused") && (
             <button type="button" onClick={restart} className="chip hover:border-signal hover:text-ink">
-              <RotateCcw size={12} aria-hidden /> Restart
+              <RotateCcw size={12} aria-hidden /> {t("Restart", "מההתחלה")}
             </button>
           )}
         </div>
@@ -179,34 +181,42 @@ export function ProblemVisual() {
         <div className="panel">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
-              <h3 className="panel-title">Reactive maintenance</h3>
-              <p className="panel-sub">What most fleets do today</p>
+              <h3 className="panel-title">{t("Reactive maintenance", "תחזוקה תגובתית")}</h3>
+              <p className="panel-sub">{t("What most fleets do today", "מה שרוב הארגונים עושים היום")}</p>
             </div>
-            <span className="rounded-full border border-risk/40 px-2.5 py-0.5 text-[11px] text-risk">After failure</span>
+            <span className="rounded-full border border-risk/40 px-2.5 py-0.5 text-[11px] text-risk">{t("After failure", "אחרי התקלה")}</span>
           </div>
           {!failed ? (
             <Status tone="var(--color-muted)">
               <HardDrive size={13} aria-hidden />
-              {phase === "idle" ? "Press Start to follow one drive through its last 60 days." : "Running normally · no warning signs are watched"}
+              {phase === "idle"
+                ? t("Press Start to follow one drive through its last 60 days.", "לחצו על התחל כדי לעקוב אחרי כונן אחד ב־60 הימים האחרונים שלו.")
+                : t("Running normally · no warning signs are watched", "עובד כרגיל · אף אחד לא עוקב אחרי סימני אזהרה")}
             </Status>
           ) : p < FAIL_AT + 0.04 ? (
             <Status tone="var(--color-risk)">
-              <AlertOctagon size={13} aria-hidden /> Day {failDay}: the drive failed without warning
+              <AlertOctagon size={13} aria-hidden /> {t(`Day ${failDay}: the drive failed without warning`, `יום ${failDay}: הכונן התקלקל בלי שום אזהרה`)}
             </Status>
           ) : (
             <Status tone="var(--color-risk)">
-              <BellRing size={13} aria-hidden /> Outage · the alert came after the failure · down {downDays} day{downDays === 1 ? "" : "s"}
+              <BellRing size={13} aria-hidden />{" "}
+              {t(
+                `Outage · the alert came after the failure · down ${downDays} day${downDays === 1 ? "" : "s"}`,
+                `השבתה · ההתראה הגיעה אחרי התקלה · ${downDays === 1 ? "יום אחד" : `${downDays} ימים`} בלי שירות`,
+              )}
             </Status>
           )}
-          <div className="relative pt-16">
-            <p className="absolute left-0 top-6 font-mono text-[10px] text-faint">no early-warning signal is watched</p>
+          <div dir="ltr" className="relative pt-16">
+            <p dir="auto" className="absolute left-0 top-6 font-mono text-[10px] text-faint">
+              {t("no early-warning signal is watched", "אין מעקב אחרי סימני אזהרה")}
+            </p>
             <Track progress={Math.min(p, FAIL_AT)} tone="risk">
-              <Marker at={FAIL_AT} show={failed} icon={<AlertOctagon size={12} />} label="Drive fails" tone="var(--color-risk)" />
+              <Marker at={FAIL_AT} show={failed} icon={<AlertOctagon size={12} />} label={t("Drive fails", "הכונן מתקלקל")} tone="var(--color-risk)" />
               <Marker
                 at={Math.min(0.97, FAIL_AT + 0.08)}
                 show={p > FAIL_AT + 0.04}
                 icon={<BellRing size={12} />}
-                label="Alert"
+                label={t("Alert", "התראה")}
                 tone="var(--color-risk)"
                 below
               />
@@ -218,8 +228,17 @@ export function ProblemVisual() {
             </Track>
           </div>
           <p className="mt-4 text-sm leading-relaxed text-soft">
-            Nothing looks wrong until the drive stops. The alert arrives <b className="font-medium text-risk">after</b> the failure — data is at risk,
-            the service degrades, and the replacement is unplanned.
+            {he ? (
+              <>
+                הכל נראה תקין עד שהכונן מפסיק לעבוד. ההתראה מגיעה <b className="font-medium text-risk">אחרי</b> התקלה: המידע בסיכון, השירות נפגע,
+                וההחלפה לא מתוכננת.
+              </>
+            ) : (
+              <>
+                Nothing looks wrong until the drive stops. The alert arrives <b className="font-medium text-risk">after</b> the failure — data is at
+                risk, the service degrades, and the replacement is unplanned.
+              </>
+            )}
           </p>
         </div>
 
@@ -227,48 +246,64 @@ export function ProblemVisual() {
         <div className="panel border-signal/25">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
-              <h3 className="panel-title">Predictive maintenance</h3>
-              <p className="panel-sub">What this system enables</p>
+              <h3 className="panel-title">{t("Predictive maintenance", "תחזוקה חזויה")}</h3>
+              <p className="panel-sub">{t("What this system enables", "מה שהמערכת שלנו מאפשרת")}</p>
             </div>
-            <span className="rounded-full border border-signal/50 px-2.5 py-0.5 text-[11px] text-signal">Before failure</span>
+            <span className="rounded-full border border-signal/50 px-2.5 py-0.5 text-[11px] text-signal">{t("Before failure", "לפני התקלה")}</span>
           </div>
           {!alerted ? (
             <Status tone="var(--color-signal)">
               <Activity size={13} aria-hidden />
               {phase === "idle" ? (
-                "Telemetry is read and scored every day."
+                t("Telemetry is read and scored every day.", "נתוני הכונן נקראים ומנוקדים בכל יום.")
               ) : (
                 <>
-                  Monitoring · risk score <span className="num">{riskAt(p).toFixed(2)}</span>
+                  {t("Monitoring · risk score", "בניטור · ציון סיכון")} <span className="num">{riskAt(p).toFixed(2)}</span>
                 </>
               )}
             </Status>
           ) : !failed ? (
             <Status tone="var(--color-warn)">
-              <Wrench size={13} aria-hidden /> Flagged {warnDays} days before failure · risk <span className="num">{riskAt(p).toFixed(2)}</span> ·
-              inspection scheduled
+              <Wrench size={13} aria-hidden /> {t(`Flagged ${warnDays} days before failure · risk`, `סומן ${warnDays} ימים לפני התקלה · סיכון`)}{" "}
+              <span className="num">{riskAt(p).toFixed(2)}</span> · {t("inspection scheduled", "נקבעה בדיקה")}
             </Status>
           ) : (
             <Status tone="var(--color-ok)">
-              <ShieldCheck size={13} aria-hidden /> Replaced in a planned window · no outage
+              <ShieldCheck size={13} aria-hidden /> {t("Replaced in a planned window · no outage", "הוחלף בתחזוקה מתוכננת · בלי השבתה")}
             </Status>
           )}
-          <div className="relative pt-24">
-            <span className="absolute right-0 top-[1.6rem] font-mono text-[10px] text-warn/70">inspect threshold</span>
+          <div dir="ltr" className="relative pt-24">
+            <span dir="auto" className="absolute right-0 top-[1.6rem] font-mono text-[10px] text-warn/70">
+              {t("inspect threshold", "סף בדיקה")}
+            </span>
             <RiskSketch progress={Math.min(p, FAIL_AT)} />
             <Track progress={Math.min(p, FAIL_AT)} tone="signal">
-              <Marker at={ALERT_AT} show={alerted} icon={<Wrench size={12} />} label="Inspect this drive" tone="var(--color-warn)" />
-              <Marker at={FAIL_AT} show={failed} icon={<ShieldCheck size={12} />} label="Replaced in time" tone="var(--color-ok)" below />
+              <Marker at={ALERT_AT} show={alerted} icon={<Wrench size={12} />} label={t("Inspect this drive", "לבדוק את הכונן")} tone="var(--color-warn)" />
+              <Marker at={FAIL_AT} show={failed} icon={<ShieldCheck size={12} />} label={t("Replaced in time", "הוחלף בזמן")} tone="var(--color-ok)" below />
             </Track>
           </div>
           <p className="mt-4 text-sm leading-relaxed text-soft">
-            Daily telemetry is read continuously. As the warning signs build, the drive's risk climbs, and an inspection is scheduled{" "}
-            <b className="font-medium text-signal">before</b> anything breaks.
+            {he ? (
+              <>
+                נתוני הכונן נקראים כל יום. כשסימני האזהרה מצטברים, ציון הסיכון עולה, ונקבעת בדיקה{" "}
+                <b className="font-medium text-signal">לפני</b> שמשהו מתקלקל.
+              </>
+            ) : (
+              <>
+                Daily telemetry is read continuously. As the warning signs build, the drive's risk climbs, and an inspection is scheduled{" "}
+                <b className="font-medium text-signal">before</b> anything breaks.
+              </>
+            )}
           </p>
         </div>
       </div>
 
-      <p className="font-mono text-[11px] text-faint">Schematic: one illustrative drive, not data. The measured version of this curve is in the Results section.</p>
+      <p className="text-[11px] text-faint">
+        {t(
+          "Schematic: one illustrative drive, not data. The measured version of this curve is in the Results section.",
+          "המחשה: כונן אחד לדוגמה, לא נתונים אמיתיים. הגרסה המדודה של העקומה נמצאת בחלק התוצאות.",
+        )}
+      </p>
     </div>
   );
 }
@@ -279,24 +314,41 @@ export function ProblemComparison() {
   // Drives with a recorded failure across every split, over the quarters the data spans.
   const failures = data?.scale.splits.reduce((a, s) => a + s.drivesWithFailure, 0);
   const perDay = data && failures ? failures / (data.scale.quarters.length * 91.3) : null;
+  const { t, he } = useLang();
   return (
     <StorySection
       id="problem"
-      kicker="The problem"
+      kicker={t("The problem", "הבעיה")}
       title={
-        <>
-          Failures are discovered <span className="text-risk">after</span> the damage is done.
-        </>
+        he ? (
+          <>
+            על תקלות מגלים רק <span className="text-risk">אחרי</span> שהנזק כבר נגרם.
+          </>
+        ) : (
+          <>
+            Failures are discovered <span className="text-risk">after</span> the damage is done.
+          </>
+        )
       }
       lede={
         data && failures && perDay ? (
-          <>
-            In the fleet we studied, {fmtInt(failures)} of {fmtInt(data.scale.drives)} drives failed over{" "}
-            {(data.scale.quarters.length / 4).toFixed(1)} years — about {Math.floor(perDay)} every day. Most are replaced
-            only once they have already stopped working.
-          </>
+          he ? (
+            <>
+              בצי הכוננים שחקרנו, {fmtInt(failures)} מתוך {fmtInt(data.scale.drives)} כוננים התקלקלו במשך {(data.scale.quarters.length / 4).toFixed(1)}{" "}
+              שנים, כ־{Math.floor(perDay)} בכל יום. רובם מוחלפים רק אחרי שכבר הפסיקו לעבוד.
+            </>
+          ) : (
+            <>
+              In the fleet we studied, {fmtInt(failures)} of {fmtInt(data.scale.drives)} drives failed over{" "}
+              {(data.scale.quarters.length / 4).toFixed(1)} years — about {Math.floor(perDay)} every day. Most are replaced only once they have
+              already stopped working.
+            </>
+          )
         ) : (
-          "Large storage fleets lose drives every day. Most are replaced only once they have already stopped working."
+          t(
+            "Large storage fleets lose drives every day. Most are replaced only once they have already stopped working.",
+            "בציי אחסון גדולים כוננים מתקלקלים כל יום. רובם מוחלפים רק אחרי שכבר הפסיקו לעבוד.",
+          )
         )
       }
     >

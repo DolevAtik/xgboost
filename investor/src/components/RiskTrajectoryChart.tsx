@@ -1,5 +1,6 @@
 import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { DriveDetail, EstimatorKind } from "../../shared/types";
+import { useLang } from "../lib/i18n";
 
 const SERIES: Record<EstimatorKind, { label: string; color: string }> = {
   xgb: { label: "XGBoost", color: "var(--color-series-xgb)" },
@@ -29,17 +30,20 @@ export function RiskTrajectoryChart({
   });
   const primary = kinds[0];
   const multi = kinds.length > 1;
+  const { t } = useLang();
 
   if (data.length < 2)
     return (
       <p className="rounded-xl border border-dashed border-line p-5 text-sm text-muted">
-        This drive has no history in the file before its current window, so there is no earlier day to re-score and no trajectory
-        to draw. Drives with a longer record show how their risk evolved.
+        {t(
+          "This drive has no history in the file before its current window, so there is no earlier day to re-score and no trajectory to draw. Drives with a longer record show how their risk evolved.",
+          "לכונן הזה אין בקובץ היסטוריה לפני החלון הנוכחי, ולכן אין יום מוקדם יותר לחשב בו ציון ואין מגמה להציג. בכוננים עם היסטוריה ארוכה יותר רואים איך הסיכון השתנה.",
+        )}
       </p>
     );
 
   return (
-    <div className="h-56">
+    <div className="h-56" dir="ltr">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
           <CartesianGrid vertical={false} />
@@ -50,7 +54,7 @@ export function RiskTrajectoryChart({
               y={thresholds[primary]}
               stroke="var(--color-warn)"
               strokeDasharray="4 4"
-              label={{ value: `${SERIES[primary].label} inspect threshold`, fill: "var(--color-muted)", fontSize: 10, position: "insideBottomRight", dy: 14 }}
+              label={{ value: t(`${SERIES[primary].label} inspect threshold`, `סף בדיקה של ${SERIES[primary].label}`), fill: "var(--color-muted)", fontSize: 10, position: "insideBottomRight", dy: 14 }}
             />
           )}
           <Tooltip

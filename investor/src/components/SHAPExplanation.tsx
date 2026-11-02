@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import type { Contribution } from "../../shared/types";
 import { featureLabel } from "../lib/smart";
+import { useLang } from "../lib/i18n";
 
 /**
  * Exact per-prediction SHAP contributions (log-odds) from the XGBoost engine.
@@ -8,20 +9,21 @@ import { featureLabel } from "../lib/smart";
  */
 export function SHAPExplanation({ contributions, top = 8 }: { contributions: Contribution[]; top?: number }) {
   const reduce = useReducedMotion();
+  const { t, lang } = useLang();
   const rows = contributions.slice(0, top);
   const max = Math.max(...rows.map((r) => Math.abs(r.contribution)), 1e-6);
 
-  if (!rows.length) return <p className="text-sm text-muted">No explanation available for this model.</p>;
+  if (!rows.length) return <p className="text-sm text-muted">{t("No explanation available for this model.", "אין הסבר זמין למודל הזה.")}</p>;
 
   return (
     <div>
-      <div className="mb-3 flex justify-between font-mono text-[10px] uppercase tracking-widest text-faint">
-        <span>▼ lowers risk</span>
-        <span>raises risk ▲</span>
+      <div dir="ltr" className="mb-3 flex justify-between font-mono text-[10px] uppercase tracking-widest text-faint">
+        <span>{t("▼ lowers risk", "▼ מוריד סיכון")}</span>
+        <span>{t("raises risk ▲", "מעלה סיכון ▲")}</span>
       </div>
       <ul className="space-y-2.5">
         {rows.map((r, i) => {
-          const f = featureLabel(r.feature);
+          const f = featureLabel(r.feature, lang);
           const w = (Math.abs(r.contribution) / max) * 50;
           const up = r.contribution > 0;
           return (
@@ -35,7 +37,7 @@ export function SHAPExplanation({ contributions, top = 8 }: { contributions: Con
                   {Math.abs(r.contribution).toFixed(2)}
                 </span>
               </div>
-              <div className="relative h-2 rounded-full bg-deep/60" title={`${r.feature}: ${r.contribution.toFixed(3)} log-odds`}>
+              <div dir="ltr" className="relative h-2 rounded-full bg-deep/60" title={`${r.feature}: ${r.contribution.toFixed(3)} log-odds`}>
                 <span className="absolute left-1/2 top-[-3px] h-[14px] w-px bg-line-strong" />
                 <motion.span
                   initial={reduce ? false : { width: 0 }}

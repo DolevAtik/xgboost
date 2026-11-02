@@ -109,4 +109,8 @@ Each visual is also viewable on its own in the artifact lab at `/#/lab`.
 * "Get in touch" opens the visitor's mail client with the message filled in. Set the
   address in `src/lib/contact.ts` (`CONTACT.email`); until then the form says it is not configured.
 * Team content and photos: `src/lib/team.ts` and `public/team/`.
+* **Languages:** English (default) and Hebrew, switched from the nav and remembered in the
+  browser. Each string sits next to its translation as `t("English", "עברית")`
+  (`src/lib/i18n.tsx`). Hebrew sets the page right-to-left; charts, timelines, grids and
+  numbers stay left-to-right. Error messages from the prediction engine are English only.
 * `STORYBOARD.md` is the original storyboard and content plan.
